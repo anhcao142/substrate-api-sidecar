@@ -8,7 +8,7 @@ export interface ISidecarConfig {
 }
 
 interface ISidecarConfigSubstrate {
-	WS_URL: string;
+	URL: string;
 	CUSTOM_TYPES: Record<string, string> | undefined;
 }
 

@@ -42,7 +42,7 @@ export class Config {
 				PORT: config.Get(MODULES.EXPRESS, CONFIG.PORT) as number,
 			},
 			SUBSTRATE: {
-				WS_URL: config.Get(MODULES.SUBSTRATE, CONFIG.WS_URL) as string,
+				URL: config.Get(MODULES.SUBSTRATE, CONFIG.URL) as string,
 				CUSTOM_TYPES: configTypes[CONFIG.CUSTOM_TYPES],
 			},
 			LOG: {

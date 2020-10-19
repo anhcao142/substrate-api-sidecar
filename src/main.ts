@@ -16,7 +16,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { ApiPromise } from '@polkadot/api';
-import { WsProvider } from '@polkadot/rpc-provider';
+import { WsProvider, HttpProvider } from '@polkadot/rpc-provider';
 import { json } from 'express';
 
 import App from './App';
@@ -36,7 +36,9 @@ async function main() {
 
 	// Instantiate a web socket connection to the node for basic polkadot-js use
 	const api = await ApiPromise.create({
-		provider: new WsProvider(config.SUBSTRATE.WS_URL),
+		provider: config.SUBSTRATE.URL.startsWith('http')
+			? new HttpProvider(config.SUBSTRATE.URL)
+			: new WsProvider(config.SUBSTRATE.URL),
 		types: {
 			...config.SUBSTRATE.CUSTOM_TYPES,
 		},
@@ -50,7 +52,7 @@ async function main() {
 
 	logger.info(
 		`Connected to chain ${chainName.toString()} on the ${implName.toString()} client at ${
-			config.SUBSTRATE.WS_URL
+			config.SUBSTRATE.URL
 		}`
 	);
 

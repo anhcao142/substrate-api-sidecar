@@ -4,7 +4,7 @@
 export enum CONFIG {
 	BIND_HOST = 'BIND_HOST',
 	PORT = 'PORT',
-	WS_URL = 'WS_URL',
+	URL = 'URL',
 	CUSTOM_TYPES = 'CUSTOM_TYPES',
 	LEVEL = 'LEVEL',
 	JSON = 'JSON',
