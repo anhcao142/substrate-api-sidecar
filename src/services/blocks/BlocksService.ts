@@ -1,29 +1,50 @@
 import { ApiPromise } from '@polkadot/api';
-import { Struct } from '@polkadot/types';
-import { GenericCall } from '@polkadot/types';
+import { expandMetadata } from '@polkadot/metadata/decorate';
+import { Compact, GenericCall, Struct } from '@polkadot/types';
+import { AbstractInt } from '@polkadot/types/codec/AbstractInt';
 import {
 	AccountId,
 	Block,
 	BlockHash,
+	BlockNumber,
+	BlockWeights,
 	Digest,
 	DispatchInfo,
 	EventRecord,
 	Hash,
 } from '@polkadot/types/interfaces';
-import { AnyJson, Codec } from '@polkadot/types/types';
+import { AnyJson, Codec, Registry } from '@polkadot/types/types';
 import { u8aToHex } from '@polkadot/util';
 import { blake2AsU8a } from '@polkadot/util-crypto';
 import { CalcFee } from '@substrate/calc';
+import { BadRequest, InternalServerError } from 'http-errors';
 
 import {
 	IBlock,
 	IExtrinsic,
+	IExtrinsicIndex,
 	ISanitizedCall,
 	ISanitizedEvent,
 	isFrameMethod,
 } from '../../types/responses';
 import { isPaysFee } from '../../types/util';
 import { AbstractService } from '../AbstractService';
+
+/**
+ * Types for fetchBlock's options
+ * @field eventDocs
+ * @field extrinsicDocs
+ * @field checkFinalized Option to reduce rpc calls. Equals true when blockId is a hash.
+ * @field queryFinalizedHead Option to reduce rpc calls. Equals true when finalized head has not been queried.
+ * @field omitFinalizedTag Option to omit the finalized tag, and return it as undefined.
+ */
+interface FetchBlockOptions {
+	eventDocs: boolean;
+	extrinsicDocs: boolean;
+	checkFinalized: boolean;
+	queryFinalizedHead: boolean;
+	omitFinalizedTag: boolean;
+}
 
 /**
  * Event methods that we check for.
@@ -35,22 +56,46 @@ enum Event {
 
 export class BlocksService extends AbstractService {
 	/**
-	 * Fetch a block enhanced with augmented and derived values.
+	 * Fetch a block augmented with derived values.
 	 *
 	 * @param hash `BlockHash` of the block to fetch.
 	 */
 	async fetchBlock(
 		hash: BlockHash,
-		eventDocs: boolean,
-		extrinsicDocs: boolean
+		{
+			eventDocs,
+			extrinsicDocs,
+			checkFinalized,
+			queryFinalizedHead,
+			omitFinalizedTag,
+		}: FetchBlockOptions
 	): Promise<IBlock> {
 		const { api } = this;
 
-		const [{ block }, events, validators] = await Promise.all([
-			api.rpc.chain.getBlock(hash),
-			this.fetchEvents(api, hash),
-			api.query.session.validators.at(hash),
-		]);
+		let block, events, finalizedHead, sessionValidators;
+		if (typeof api.query.session?.validators?.at === 'function') {
+			[
+				{ block },
+				events,
+				sessionValidators,
+				finalizedHead,
+			] = await Promise.all([
+				api.rpc.chain.getBlock(hash),
+				this.fetchEvents(api, hash),
+				api.query.session.validators.at(hash),
+				queryFinalizedHead
+					? api.rpc.chain.getFinalizedHead()
+					: Promise.resolve(hash),
+			]);
+		} else {
+			[{ block }, events, finalizedHead] = await Promise.all([
+				api.rpc.chain.getBlock(hash),
+				this.fetchEvents(api, hash),
+				queryFinalizedHead
+					? api.rpc.chain.getFinalizedHead()
+					: Promise.resolve(hash),
+			]);
+		}
 
 		const {
 			parentHash,
@@ -60,11 +105,11 @@ export class BlocksService extends AbstractService {
 			digest,
 		} = block.header;
 
-		const authorId = this.extractAuthor(validators, digest);
+		const authorId = sessionValidators
+			? this.extractAuthor(sessionValidators, digest)
+			: undefined;
 
-		const logs = digest.logs.map((log) => {
-			const { type, index, value } = log;
-
+		const logs = digest.logs.map(({ type, index, value }) => {
 			return { type, index, value };
 		});
 
@@ -81,6 +126,19 @@ export class BlocksService extends AbstractService {
 			eventDocs
 		);
 
+		let finalized = undefined;
+
+		if (!omitFinalizedTag) {
+			// Check if the requested block is finalized
+			finalized = await this.isFinalizedBlock(
+				api,
+				number,
+				hash,
+				finalizedHead,
+				checkFinalized
+			);
+		}
+
 		// The genesis block is a special case with little information associated with it.
 		if (parentHash.every((byte) => !byte)) {
 			return {
@@ -94,6 +152,7 @@ export class BlocksService extends AbstractService {
 				onInitialize,
 				extrinsics,
 				onFinalize,
+				finalized,
 			};
 		}
 
@@ -187,6 +246,32 @@ export class BlocksService extends AbstractService {
 			onInitialize,
 			extrinsics,
 			onFinalize,
+			finalized,
+		};
+	}
+
+	/**
+	 *
+	 * @param block Takes in a block which is the result of `BlocksService.fetchBlock`
+	 * @param extrinsicIndex Parameter passed into the request
+	 */
+	fetchExtrinsicByIndex(
+		block: IBlock,
+		extrinsicIndex: number
+	): IExtrinsicIndex {
+		if (extrinsicIndex > block.extrinsics.length - 1) {
+			throw new BadRequest('Requested `extrinsicIndex` does not exist');
+		}
+
+		const { hash, number } = block;
+		const height = number.unwrap().toString(10);
+
+		return {
+			at: {
+				height,
+				hash,
+			},
+			extrinsics: block.extrinsics[extrinsicIndex],
 		};
 	}
 
@@ -213,15 +298,16 @@ export class BlocksService extends AbstractService {
 				tip,
 			} = extrinsic;
 			const hash = u8aToHex(blake2AsU8a(extrinsic.toU8a(), 256));
+			const call = block.registry.createType('Call', method);
 
 			return {
 				method: {
-					pallet: method.sectionName,
-					method: method.methodName,
+					pallet: method.section,
+					method: method.method,
 				},
 				signature: isSigned ? { signature, signer } : null,
 				nonce: isSigned ? nonce : null,
-				args: this.parseGenericCall(method).args,
+				args: this.parseGenericCall(call, block.registry).args,
 				tip: isSigned ? tip : null,
 				hash,
 				info: {},
@@ -317,7 +403,7 @@ export class BlocksService extends AbstractService {
 	}
 
 	/**
-	 * Create calcFee from params.
+	 * Create calcFee from params or return `null` if calcFee cannot be created.
 	 *
 	 * @param api ApiPromise
 	 * @param parentHash Hash of the parent block
@@ -328,46 +414,111 @@ export class BlocksService extends AbstractService {
 		parentHash: Hash,
 		block: Block
 	) {
-		let parentParentHash: Hash;
-		if (block.header.number.toNumber() > 1) {
-			parentParentHash = (await api.rpc.chain.getHeader(parentHash))
-				.parentHash;
+		const perByte = api.consts.transactionPayment?.transactionByteFee;
+		const extrinsicBaseWeightExists =
+			api.consts.system.extrinsicBaseWeight ||
+			api.consts.system.blockWeights.perClass.normal.baseExtrinsic;
+
+		let calcFee, specName, specVersion;
+		if (
+			perByte === undefined ||
+			extrinsicBaseWeightExists === undefined ||
+			typeof api.query.transactionPayment?.nextFeeMultiplier?.at !==
+				'function'
+		) {
+			// We do not have the necessary materials to build calcFee, so we just give a dummy function
+			// that aligns with the expected API of calcFee.
+			calcFee = { calc_fee: () => null };
+
+			const version = await api.rpc.state.getRuntimeVersion(parentHash);
+			[specVersion, specName] = [
+				version.specName.toString(),
+				version.specVersion.toNumber(),
+			];
 		} else {
-			parentParentHash = parentHash;
-		}
+			const coefficients = api.consts.transactionPayment.weightToFee.map(
+				(c) => {
+					return {
+						// Anything that could overflow Number.MAX_SAFE_INTEGER needs to be serialized
+						// to BigInt or string.
+						coeffInteger: c.coeffInteger.toString(10),
+						coeffFrac: c.coeffFrac.toNumber(),
+						degree: c.degree.toNumber(),
+						negative: c.negative,
+					};
+				}
+			);
 
-		const perByte = api.consts.transactionPayment.transactionByteFee;
-		const extrinsicBaseWeight = api.consts.system.extrinsicBaseWeight;
-		const multiplier = await api.query.transactionPayment.nextFeeMultiplier.at(
-			parentHash
-		);
-		// The block where the runtime is deployed falsely proclaims it would
-		// be already using the new runtime. This workaround therefore uses the
-		// parent of the parent in order to determine the correct runtime under which
-		// this block was produced.
-		const version = await api.rpc.state.getRuntimeVersion(parentParentHash);
-		const specName = version.specName.toString();
-		const specVersion = version.specVersion.toNumber();
-		const coefficients = api.consts.transactionPayment.weightToFee.map(
-			(c) => {
-				return {
-					coeffInteger: c.coeffInteger.toString(),
-					coeffFrac: c.coeffFrac,
-					degree: c.degree,
-					negative: c.negative,
-				};
+			// The block where the runtime is deployed falsely proclaims it would
+			// be already using the new runtime. This workaround therefore uses the
+			// parent of the parent in order to determine the correct runtime under which
+			// this block was produced.
+			let parentParentHash: Hash;
+			if (block.header.number.toNumber() > 1) {
+				parentParentHash = (await api.rpc.chain.getHeader(parentHash))
+					.parentHash;
+			} else {
+				parentParentHash = parentHash;
 			}
-		);
 
-		return {
-			calcFee: CalcFee.from_params(
+			const [version, multiplier] = await Promise.all([
+				api.rpc.state.getRuntimeVersion(parentParentHash),
+				api.query.transactionPayment.nextFeeMultiplier.at(parentHash),
+			]);
+
+			[specName, specVersion] = [
+				version.specName.toString(),
+				version.specVersion.toNumber(),
+			];
+
+			// This `extrinsicBaseWeight` changed from using system.extrinsicBaseWeight => system.blockWeights.perClass.normal.baseExtrinsic
+			// in polkadot v0.8.27 due to this pr: https://github.com/paritytech/substrate/pull/6629 .
+			// TODO https://github.com/paritytech/substrate-api-sidecar/issues/393 .
+			// TODO once https://github.com/polkadot-js/api/issues/2365 is resolved we can use that instead.
+			let extrinsicBaseWeight;
+			if (
+				specName !== api.runtimeVersion.specName.toString() ||
+				specVersion !== api.runtimeVersion.specVersion.toNumber()
+			) {
+				// We are in a runtime that does **not** match the decorated metadata in the api,
+				// so we must fetch the correct metadata, decorate it and pull out the constant
+				const metadata = await api.rpc.state.getMetadata(
+					parentParentHash
+				);
+				const decorated = expandMetadata(api.registry, metadata);
+
+				extrinsicBaseWeight =
+					((decorated.consts.system
+						?.extrinsicBaseWeight as unknown) as AbstractInt) ||
+					((decorated.consts.system
+						?.blockWeights as unknown) as BlockWeights).perClass
+						?.normal?.baseExtrinsic;
+			} else {
+				// We are querying a runtime that matches the decorated metadata in the api
+				extrinsicBaseWeight =
+					(api.consts.system?.extrinsicBaseWeight as AbstractInt) ||
+					api.consts.system.blockWeights.perClass?.normal
+						?.baseExtrinsic;
+			}
+
+			if (!extrinsicBaseWeight) {
+				throw new InternalServerError(
+					'`extrinsicBaseWeight` is not defined when it was expected to be defined. File an issue at https://github.com/paritytech/substrate-api-sidecar/issues'
+				);
+			}
+
+			calcFee = CalcFee.from_params(
 				coefficients,
-				BigInt(extrinsicBaseWeight.toString()),
-				multiplier.toString(),
-				perByte.toString(),
+				extrinsicBaseWeight.toBigInt(),
+				multiplier.toString(10),
+				perByte.toString(10),
 				specName,
 				specVersion
-			),
+			);
+		}
+
+		return {
+			calcFee,
 			specName,
 			specVersion,
 		};
@@ -394,13 +545,15 @@ export class BlocksService extends AbstractService {
 	 * Helper function for `parseGenericCall`.
 	 *
 	 * @param argsArray array of `Codec` values
+	 * @param registry type registry of the block the call belongs to
 	 */
 	private parseArrayGenericCalls(
-		argsArray: Codec[]
+		argsArray: Codec[],
+		registry: Registry
 	): (Codec | ISanitizedCall)[] {
 		return argsArray.map((argument) => {
 			if (argument instanceof GenericCall) {
-				return this.parseGenericCall(argument);
+				return this.parseGenericCall(argument, registry);
 			}
 
 			return argument;
@@ -413,9 +566,12 @@ export class BlocksService extends AbstractService {
 	 * call index). Parses `GenericCall`s that are nested as arguments.
 	 *
 	 * @param genericCall `GenericCall`
+	 * @param registry type registry of the block the call belongs to
 	 */
-	private parseGenericCall(genericCall: GenericCall): ISanitizedCall {
-		const { sectionName, methodName } = genericCall;
+	private parseGenericCall(
+		genericCall: GenericCall,
+		registry: Registry
+	): ISanitizedCall {
 		const newArgs = {};
 
 		// Pull out the struct of arguments to this call
@@ -428,17 +584,33 @@ export class BlocksService extends AbstractService {
 				const argument = callArgs.get(paramName);
 
 				if (Array.isArray(argument)) {
-					newArgs[paramName] = this.parseArrayGenericCalls(argument);
+					newArgs[paramName] = this.parseArrayGenericCalls(
+						argument,
+						registry
+					);
 				} else if (argument instanceof GenericCall) {
-					newArgs[paramName] = this.parseGenericCall(argument);
+					newArgs[paramName] = this.parseGenericCall(
+						argument,
+						registry
+					);
 				} else if (
 					paramName === 'call' &&
 					argument?.toRawType() === 'Bytes'
 				) {
 					// multiSig.asMulti.args.call is an OpaqueCall (Vec<u8>) that we
 					// serialize to a polkadot-js Call and parse so it is not a hex blob.
-					const call = this.api.createType('Call', argument.toHex());
-					newArgs[paramName] = this.parseGenericCall(call);
+					try {
+						const call = registry.createType(
+							'Call',
+							argument.toHex()
+						);
+						newArgs[paramName] = this.parseGenericCall(
+							call,
+							registry
+						);
+					} catch {
+						newArgs[paramName] = argument;
+					}
 				} else {
 					newArgs[paramName] = argument;
 				}
@@ -447,39 +619,105 @@ export class BlocksService extends AbstractService {
 
 		return {
 			method: {
-				pallet: sectionName,
-				method: methodName,
+				pallet: genericCall.section,
+				method: genericCall.method,
 			},
 			args: newArgs,
 		};
 	}
 
-	// Almost exact mimic of https://github.com/polkadot-js/api/blob/master/packages/api-derive/src/chain/getHeader.ts#L27
+	// Almost exact mimic of https://github.com/polkadot-js/api/blob/e51e89df5605b692033df864aa5ab6108724af24/packages/api-derive/src/type/util.ts#L6
 	// but we save a call to `getHeader` by hardcoding the logic here and using the digest from the blocks header.
 	private extractAuthor(
 		sessionValidators: AccountId[],
 		digest: Digest
 	): AccountId | undefined {
 		const [pitem] = digest.logs.filter(({ type }) => type === 'PreRuntime');
-
 		// extract from the substrate 2.0 PreRuntime digest
 		if (pitem) {
 			const [engine, data] = pitem.asPreRuntime;
-
 			return engine.extractAuthor(data, sessionValidators);
 		} else {
 			const [citem] = digest.logs.filter(
 				({ type }) => type === 'Consensus'
 			);
-
 			// extract author from the consensus (substrate 1.0, digest)
 			if (citem) {
 				const [engine, data] = citem.asConsensus;
-
 				return engine.extractAuthor(data, sessionValidators);
 			}
 		}
 
 		return undefined;
+	}
+
+	/**
+	 * When querying a block this will immediately inform the request whether
+	 * or not the queried block is considered finalized at the time of querying.
+	 *
+	 * @param api ApiPromise to use for query
+	 * @param blockNumber Queried block number
+	 * @param queriedHash Hash of user queried block
+	 * @param finalizedHead Finalized head for our chain
+	 * @param checkFinalized If the passed in blockId is a hash
+	 */
+	private async isFinalizedBlock(
+		api: ApiPromise,
+		blockNumber: Compact<BlockNumber>,
+		queriedHash: BlockHash,
+		finalizedHead: BlockHash,
+		checkFinalized: boolean
+	): Promise<boolean> {
+		if (checkFinalized) {
+			// The blockId url param is a hash
+			const [finalizedHeadBlock, canonHash] = await Promise.all([
+				// Returns the header of the most recently finalized block
+				api.rpc.chain.getHeader(finalizedHead),
+				// Fetch the hash of the block with equal height on the canon chain.
+				// N.B. We assume when we query by number <= finalized head height,
+				// we will always get a block on the finalized, canonical chain.
+				api.rpc.chain.getBlockHash(blockNumber.unwrap()),
+			]);
+
+			// If queried by hash this is the original request param
+			const hash = queriedHash.toHex();
+
+			// If this conditional is satisfied, the queried hash is on a fork,
+			// and is not on the canonical chain and therefore not finalized
+			if (canonHash.toHex() !== hash) {
+				return false;
+			}
+
+			// Retreive the finalized head blockNumber
+			const finalizedHeadBlockNumber = finalizedHeadBlock?.number;
+
+			// If the finalized head blockNumber is undefined return false
+			if (!finalizedHeadBlockNumber) {
+				return false;
+			}
+
+			// Check if the user's block is less than or equal to the finalized head.
+			// If so, the user's block is finalized.
+			return blockNumber.unwrap().lte(finalizedHeadBlockNumber.unwrap());
+		} else {
+			// The blockId url param is an integer
+
+			// Returns the header of the most recently finalized block
+			const finalizedHeadBlock = await api.rpc.chain.getHeader(
+				finalizedHead
+			);
+
+			// Retreive the finalized head blockNumber
+			const finalizedHeadBlockNumber = finalizedHeadBlock?.number;
+
+			// If the finalized head blockNumber is undefined return false
+			if (!finalizedHeadBlockNumber) {
+				return false;
+			}
+
+			// Check if the user's block is less than or equal to the finalized head.
+			// If so, the user's block is finalized.
+			return blockNumber.unwrap().lte(finalizedHeadBlockNumber.unwrap());
+		}
 	}
 }

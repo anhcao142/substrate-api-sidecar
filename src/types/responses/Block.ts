@@ -1,6 +1,6 @@
 import { Compact } from '@polkadot/types';
-import AccountId from '@polkadot/types/generic/AccountId';
 import { BlockHash, BlockNumber, Hash } from '@polkadot/types/interfaces';
+import { AccountId } from '@polkadot/types/interfaces/runtime';
 import { Codec } from '@polkadot/types/types';
 
 import { IExtrinsic, ISanitizedEvent } from '.';
@@ -16,6 +16,7 @@ export interface IBlock {
 	onInitialize: IOnInitializeOrFinalize;
 	extrinsics: IExtrinsic[];
 	onFinalize: IOnInitializeOrFinalize;
+	finalized: boolean | undefined;
 }
 
 interface IOnInitializeOrFinalize {

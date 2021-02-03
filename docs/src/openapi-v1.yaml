@@ -45,6 +45,15 @@ paths:
           description: Block height (as a non-negative integer) or hash
             (as a hex string).
           format: unsignedInteger or $hex
+      - name: token
+        in: query
+        description: 'Token to query the balance of. If not specified it will query
+          the chains native token (e.g. DOT for Polkadot). Note: this is only relevant
+          for chains that support multiple tokens through the ORML tokens pallet.'
+        required: false
+        schema:
+          type: string
+          description: Token symbol
       responses:
         "200":
           description: successful operation
@@ -260,6 +269,57 @@ paths:
                 $ref: '#/components/schemas/Block'
         "400":
           description: invalid Block identifier supplied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /blocks/{blockId}/extrinsics/{extrinsicIndex}:
+    get:
+      tags:
+      - blocks
+      summary: Get an extrinsic by its extrinsicIndex and block height or hash. 
+        The pair blockId, extrinsicIndex is sometimes referred to as a Timepoint.
+      description: Returns a single extrinsic.
+      operationId: getExtrinsicByTimepoint
+      parameters:
+      - name: blockId
+        in: path
+        description: Block identifier, as the block height or block hash.
+        required: true
+        schema:
+          pattern: a-km-zA-HJ-NP-Z1-9{8,64}
+          type: string
+      - name: extrinsicIndex
+        in: path
+        description: The extrinsic's index within the block's body.
+        required: true
+        schema: 
+          type: string
+      - name: eventDocs
+        in: query
+        description: When set to `true`, every event will have an extra `docs`
+          property with a string of the events documentation.
+        required: false
+        schema:
+          type: boolean
+          default: false
+      - name: extrinsicDocs
+        in: query
+        description: When set to `true`, every extrinsic will have an extra `docs`
+          property with a string of the extrinsics documentation.
+        required: false
+        schema:
+          type: boolean
+          default: false
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtrinsicIndex'
+        "400":
+          description: Requested `extrinsicIndex` does not exist
           content:
             application/json:
               schema:
@@ -564,6 +624,59 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RuntimeSpec'
+  /pallets/{palletId}/storage:
+    get:
+      tags:
+      - pallets
+      summary: Get a list of storage items for a pallet.
+      description: Returns a list of storage item metadata for storage items of the
+        specified palletId.
+      parameters:
+      - name: palletId
+        in: path
+        description: 'Name or index of the pallet to query the storage of. Note: the pallet name must match what is
+          specified in the runtime metadata.'
+        required: true
+        schema:
+          type: string
+      - name: onlyIds
+        in: query
+        description: Only return the names (IDs) of the storage items instead of all of each storage
+          item's metadata.
+        required: false
+        schema:
+          type: boolean
+      - name: at
+        in: query
+        description: Block at which to retrieve a list of
+          the pallet's storage items.
+        required: false
+        schema:
+          type: string
+          description: Block identifier, as the block height or block hash.
+          format: unsignedInteger or $hex
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                description: Pallet info and Array of storageItemIds.
+                items:
+                  $ref: '#/components/schemas/PalletStorage'
+        "400":
+          description: invalid blockId supplied for at query param
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "404":
+          description: could not find pallet with palletId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /pallets/{palletId}/storage/{storageItemId}:
     get:
       tags:
@@ -575,7 +688,8 @@ paths:
       parameters:
       - name: palletId
         in: path
-        description: Name or index of the pallet to query the storage of.
+        description: 'Name or index of the pallet to query the storage of. Note: pallet name aligns with
+          pallet name as specified in runtime metadata.'
         required: true
         schema:
           type: string
@@ -662,6 +776,10 @@ components:
         nonce:
           type: string
           description: Account nonce.
+          format: unsignedInteger
+        tokenSymbol:
+          type: string
+          description: Token symbol of the balances displayed in this response.
           format: unsignedInteger
         free:
           type: string
@@ -936,7 +1054,10 @@ components:
           format: unsignedInteger
         args:
           type: object
-          description: Object of arguments keyed by parameter name.
+          description: >-
+            Object of arguments keyed by parameter name. Note: if you are expecting an [`OpaqueCall`](https://substrate.dev/rustdocs/v2.0.0/pallet_multisig/type.OpaqueCall.html)
+            and it is not decoded in the response (i.e. it is just a hex string), then Sidecar was
+            not able to decode it and likely that it is not a valid call for the runtime.
         tip:
           type: string
           description: Any tip added to the transaction.
@@ -963,6 +1084,14 @@ components:
             Block authors could insert the extrinsic as an inherent in the block
             and not pay a fee. Always check that `paysFee` is `true` and that the
             extrinsic is signed when reconciling old blocks.
+    ExtrinsicIndex:
+      type: object
+      properties:
+        at:
+          $ref: '#/components/schemas/BlockIdentifiers'
+        extrinsic:
+          $ref: '#/components/schemas/Extrinsic'
+      description: A single extrinsic at a given block.
     BlockInitialize:
       type: object
       properties:
@@ -1024,6 +1153,11 @@ components:
             $ref: '#/components/schemas/Extrinsic'
         onFinalize:
           $ref: '#/components/schemas/BlockFinalize'
+        finalized:
+          type: boolean
+          description: >-
+            A boolean identifying whether the block is finalized or not. 
+            Note: on chains that do not have deterministic finality this field is omitted.
       description: >-
         Note: Block finalization does not correspond to consensus, i.e. whether
         the block is in the canonical chain. It denotes the finalization of block
@@ -1454,6 +1588,7 @@ components:
         name:
           type: string
           example: "ReferendumInfoOf"
+          description: The storage item's name (which is the same as the storage item's ID).
         modifier:
           type: string
           example: "Optional"
@@ -1506,6 +1641,22 @@ components:
                 turnout: "34485320658000000"
         metadata:
           $ref: '#/components/schemas/PalletStorageItemMetadata'
+    PalletStorage:
+      type: object
+      properties:
+        pallet:
+          type: string
+          description: Name of the pallet.
+          example: "democracy"
+        palletIndex:
+          type: string
+          description: Index of the pallet for looking up storage.
+          example: "15"
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PalletStorageItemMetadata'
+          description: Array containing metadata for each storage entry of the pallet.
   requestBodies:
     Transaction:
       content:

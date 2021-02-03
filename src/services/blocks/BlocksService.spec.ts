@@ -1,8 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
+import { ApiPromise } from '@polkadot/api';
 import { RpcPromiseResult } from '@polkadot/api/types/rpc';
-import Extrinsic from '@polkadot/types/extrinsic/Extrinsic';
+import { GenericExtrinsic } from '@polkadot/types';
 import { GenericCall } from '@polkadot/types/generic';
 import { BlockHash, Hash, SignedBlock } from '@polkadot/types/interfaces';
+import { BadRequest } from 'http-errors';
 
 import { sanitizeNumbers } from '../../sanitize/sanitizeNumbers';
 import { createCall } from '../../test-helpers/createCall';
@@ -15,8 +17,11 @@ import {
 	getBlock,
 	mockApi,
 	mockBlock789629,
+	mockForkedBlock789629,
 } from '../test-helpers/mock';
 import * as block789629 from '../test-helpers/mock/data/block789629.json';
+import { parseNumberOrThrow } from '../test-helpers/mock/parseNumberOrThrow';
+import * as block789629Extrinsic from '../test-helpers/responses/blocks/block789629Extrinsic.json';
 import * as blocks789629Response from '../test-helpers/responses/blocks/blocks789629.json';
 import { BlocksService } from './BlocksService';
 
@@ -35,9 +40,18 @@ const blocksService = new BlocksService(mockApi);
 describe('BlocksService', () => {
 	describe('fetchBlock', () => {
 		it('works when ApiPromise works (block 789629)', async () => {
+			// fetchBlock options
+			const options = {
+				eventDocs: true,
+				extrinsicDocs: true,
+				checkFinalized: false,
+				queryFinalizedHead: false,
+				omitFinalizedTag: false,
+			};
+
 			expect(
 				sanitizeNumbers(
-					await blocksService.fetchBlock(blockHash789629, true, true)
+					await blocksService.fetchBlock(blockHash789629, options)
 				)
 			).toMatchObject(blocks789629Response);
 		});
@@ -48,10 +62,21 @@ describe('BlocksService', () => {
 				'Block',
 				block789629
 			);
+
 			mockBlock789629BadExt.extrinsics.pop();
+
 			mockBlock789629BadExt.extrinsics.unshift(
-				(undefined as unknown) as Extrinsic
+				(undefined as unknown) as GenericExtrinsic
 			);
+
+			// fetchBlock Options
+			const options = {
+				eventDocs: false,
+				extrinsicDocs: false,
+				checkFinalized: false,
+				queryFinalizedHead: false,
+				omitFinalizedTag: false,
+			};
 
 			mockApi.rpc.chain.getBlock = (() =>
 				Promise.resolve().then(() => {
@@ -61,7 +86,7 @@ describe('BlocksService', () => {
 				}) as unknown) as GetBlock;
 
 			await expect(
-				blocksService.fetchBlock(blockHash789629, false, false)
+				blocksService.fetchBlock(blockHash789629, options)
 			).rejects.toThrow(
 				new Error(
 					`Cannot destructure property 'method' of 'extrinsic' as it is undefined.`
@@ -69,6 +94,24 @@ describe('BlocksService', () => {
 			);
 
 			mockApi.rpc.chain.getBlock = (getBlock as unknown) as GetBlock;
+		});
+
+		it('Returns the finalized tag as undefined when omitFinalizedTag equals true', async () => {
+			// fetchBlock options
+			const options = {
+				eventDocs: true,
+				extrinsicDocs: true,
+				checkFinalized: false,
+				queryFinalizedHead: false,
+				omitFinalizedTag: true,
+			};
+
+			const block = await blocksService.fetchBlock(
+				blockHash789629,
+				options
+			);
+
+			expect(block.finalized).toEqual(undefined);
 		});
 	});
 
@@ -121,13 +164,19 @@ describe('BlocksService', () => {
 		it('does not handle an empty object', () =>
 			expect(() =>
 				blocksService['parseGenericCall'](
-					({} as unknown) as GenericCall
+					({} as unknown) as GenericCall,
+					mockBlock789629.registry
 				)
 			).toThrow());
 
 		it('parses a simple balances.transfer', () => {
 			expect(
-				JSON.stringify(blocksService['parseGenericCall'](transfer))
+				JSON.stringify(
+					blocksService['parseGenericCall'](
+						transfer,
+						mockBlock789629.registry
+					)
+				)
 			).toBe(JSON.stringify(transferOutput));
 		});
 
@@ -159,7 +208,12 @@ describe('BlocksService', () => {
 			};
 
 			expect(
-				JSON.stringify(blocksService['parseGenericCall'](batch4))
+				JSON.stringify(
+					blocksService['parseGenericCall'](
+						batch4,
+						mockBlock789629.registry
+					)
+				)
 			).toBe(
 				JSON.stringify({
 					...baseBatch,
@@ -232,7 +286,12 @@ describe('BlocksService', () => {
 			};
 
 			expect(
-				JSON.stringify(blocksService['parseGenericCall'](batch))
+				JSON.stringify(
+					blocksService['parseGenericCall'](
+						batch,
+						mockBlock789629.registry
+					)
+				)
 			).toEqual(
 				JSON.stringify({
 					method: {
@@ -243,6 +302,114 @@ describe('BlocksService', () => {
 						calls: [sudoOutput, sudoOutput, sudoOutput],
 					},
 				})
+			);
+		});
+	});
+
+	describe('BlockService.isFinalizedBlock', () => {
+		const finalizedHead = polkadotRegistry.createType(
+			'BlockHash',
+			'0x91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3'
+		);
+
+		const blockNumber = polkadotRegistry.createType(
+			'Compact<BlockNumber>',
+			789629
+		);
+
+		it('Returns false when queried blockId is not canonical', async () => {
+			const getHeader = (_hash: Hash) =>
+				Promise.resolve().then(() => mockForkedBlock789629.header);
+
+			const getBlockHash = (_zero: number) =>
+				Promise.resolve().then(() => finalizedHead);
+
+			const forkMockApi = {
+				rpc: {
+					chain: {
+						getHeader,
+						getBlockHash,
+					},
+				},
+			} as ApiPromise;
+
+			const queriedHash = polkadotRegistry.createType(
+				'BlockHash',
+				'0x7b713de604a99857f6c25eacc115a4f28d2611a23d9ddff99ab0e4f1c17a8578'
+			);
+
+			expect(
+				await blocksService['isFinalizedBlock'](
+					forkMockApi,
+					blockNumber,
+					queriedHash,
+					finalizedHead,
+					true
+				)
+			).toEqual(false);
+		});
+
+		it('Returns true when queried blockId is canonical', async () => {
+			expect(
+				await blocksService['isFinalizedBlock'](
+					mockApi,
+					blockNumber,
+					finalizedHead,
+					finalizedHead,
+					true
+				)
+			).toEqual(true);
+		});
+	});
+
+	describe('fetchExrinsicByIndex', () => {
+		// fetchBlock options
+		const options = {
+			eventDocs: false,
+			extrinsicDocs: false,
+			checkFinalized: false,
+			queryFinalizedHead: false,
+			omitFinalizedTag: false,
+		};
+
+		it('Returns the correct extrinisics object for block 789629', async () => {
+			const block = await blocksService.fetchBlock(
+				blockHash789629,
+				options
+			);
+
+			/**
+			 * The `extrinsicIndex` (second param) is being tested for a non-zero
+			 * index here.
+			 */
+			const extrinsic = blocksService['fetchExtrinsicByIndex'](block, 2);
+
+			expect(JSON.stringify(sanitizeNumbers(extrinsic))).toEqual(
+				JSON.stringify(block789629Extrinsic)
+			);
+		});
+
+		it("Throw an error when `extrinsicIndex` doesn't exist", async () => {
+			const block = await blocksService.fetchBlock(
+				blockHash789629,
+				options
+			);
+
+			expect(() => {
+				blocksService['fetchExtrinsicByIndex'](block, 5);
+			}).toThrow(
+				new BadRequest('Requested `extrinsicIndex` does not exist')
+			);
+		});
+
+		it('Throw an error when param `extrinsicIndex` is less than 0', () => {
+			expect(() => {
+				parseNumberOrThrow(
+					'-5',
+					'`exstrinsicIndex` path param is not a number'
+				);
+			}).toThrow(
+				new BadRequest('`exstrinsicIndex` path param is not a number')
 			);
 		});
 	});

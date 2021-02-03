@@ -49,6 +49,9 @@ impl Multiplier {
             ("westend", v) if 10 < v && v < 31 => V1((new_i128(inner), false)),
             ("westend", v) if 31 <= v => V2(new_u128(inner)),
 
+            ("dock-main-runtime", _) => V2(new_u128(inner)),
+            ("dock-testnet", _) => V2(new_u128(inner)),
+
             _ => {
                 info!("Unsupported runtime: {}#{}", spec_name, spec_version);
                 return None;
@@ -95,6 +98,10 @@ impl CalcFee {
         spec_version: u32,
     ) -> Option<CalcFee> {
         debug::setup();
+        info!(
+            "CalcFee::from_params({:#?}, {}, {}, {}, {}, {})",
+            polynomial, extrinsic_base_weight, multiplier, per_byte_fee, spec_name, spec_version
+        );
 
         let polynomial: Vec<Coefficient> = {
             let poly: Option<Vec<JSCoefficient>> = polynomial.into_serde().unwrap();

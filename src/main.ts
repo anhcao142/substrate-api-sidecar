@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 // Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate API Sidecar.
 //
@@ -16,36 +17,47 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { ApiPromise } from '@polkadot/api';
+import * as apps from '@polkadot/apps-config/api';
 import { WsProvider, HttpProvider } from '@polkadot/rpc-provider';
+import { OverrideBundleType, RegistryTypes } from '@polkadot/types/types';
 import { json } from 'express';
 
 import App from './App';
-import { Config } from './Config';
-import * as controllers from './controllers';
+import { getControllersForSpec } from './chains-config';
 import { consoleOverride } from './logging/consoleOverride';
 import { Log } from './logging/Log';
 import * as middleware from './middleware';
+import { SidecarConfig } from './SidecarConfig';
+
+const { logger } = Log;
+const { config } = SidecarConfig;
 
 async function main() {
-	const { config } = Config;
-
-	const { logger } = Log;
-
 	// Overide console.{log, error, warn, etc}
 	consoleOverride(logger);
 
-	// Instantiate a web socket connection to the node for basic polkadot-js use
+	const { TYPES_BUNDLE, TYPES_SPEC, TYPES_CHAIN, TYPES } = config.SUBSTRATE;
+	// Instantiate a web socket connection to the node and load types
 	const api = await ApiPromise.create({
 		provider: config.SUBSTRATE.URL.startsWith('http')
 			? new HttpProvider(config.SUBSTRATE.URL)
 			: new WsProvider(config.SUBSTRATE.URL),
-		types: {
-			...config.SUBSTRATE.CUSTOM_TYPES,
-		},
+		/* eslint-disable @typescript-eslint/no-var-requires */
+		typesBundle: TYPES_BUNDLE
+			? (require(TYPES_BUNDLE) as OverrideBundleType)
+			: apps.typesBundle,
+		typesChain: TYPES_CHAIN
+			? (require(TYPES_CHAIN) as Record<string, RegistryTypes>)
+			: apps.typesChain,
+		typesSpec: TYPES_SPEC
+			? (require(TYPES_SPEC) as Record<string, RegistryTypes>)
+			: apps.typesSpec,
+		types: TYPES ? (require(TYPES) as RegistryTypes) : undefined,
+		/* eslint-enable @typescript-eslint/no-var-requires */
 	});
 
 	// Gather some basic details about the node so we can display a nice message
-	const [chainName, { implName }] = await Promise.all([
+	const [chainName, { implName, specName }] = await Promise.all([
 		api.rpc.system.chain(),
 		api.rpc.state.getRuntimeVersion(),
 	]);
@@ -55,57 +67,16 @@ async function main() {
 			config.SUBSTRATE.URL
 		}`
 	);
-
-	// Instantiate v0 controllers (note these will be removed upon the release of v1.0.0)
-	const claimsController = new controllers.v0.v0Claims(api);
-	const txArtifactsController = new controllers.v0.v0TransactionMaterial(api);
-	const txFeeEstimateController = new controllers.v0.v0TransactionFeeEstimate(
-		api
+	startUpPrompt(
+		config.SUBSTRATE.URL,
+		chainName.toString(),
+		implName.toString()
 	);
-	const txSubmitController = new controllers.v0.v0TransactionSubmit(api);
-	const vestingController = new controllers.v0.v0AccountsVestingInfo(api);
-	const balancesController = new controllers.v0.v0AccountsBalanceInfo(api);
-	const stakingInfoController = new controllers.v0.v0AccountsStakingInfo(api);
-	const v0blocksController = new controllers.v0.v0Blocks(api);
-	const stakingController = new controllers.v0.v0PalletsStakingProgress(api);
-	const metadataController = new controllers.v0.v0Metadata(api);
-
-	const v0Controllers = [
-		claimsController,
-		txArtifactsController,
-		txFeeEstimateController,
-		txSubmitController,
-		stakingInfoController,
-		vestingController,
-		balancesController,
-		v0blocksController,
-		stakingController,
-		metadataController,
-	];
 
 	// Create our App
 	const app = new App({
 		preMiddleware: [json(), middleware.httpLoggerCreate(logger)],
-		controllers: [
-			new controllers.Blocks(api),
-			new controllers.AccountsStakingPayouts(api),
-			new controllers.AccountsBalanceInfo(api),
-			new controllers.AccountsStakingInfo(api),
-			new controllers.AccountsVestingInfo(api),
-			new controllers.NodeNetwork(api),
-			new controllers.NodeVersion(api),
-			new controllers.NodeTransactionPool(api),
-			new controllers.RuntimeCode(api),
-			new controllers.RuntimeSpec(api),
-			new controllers.RuntimeMetadata(api),
-			new controllers.TransactionDryRun(api),
-			new controllers.TransactionMaterial(api),
-			new controllers.TransactionFeeEstimate(api),
-			new controllers.TransactionSubmit(api),
-			new controllers.palletsStakingProgress(api),
-			new controllers.palletsStorageItem(api),
-			...v0Controllers,
-		],
+		controllers: getControllersForSpec(api, specName.toString()),
 		postMiddleware: [
 			middleware.txError,
 			middleware.httpError,
@@ -126,3 +97,59 @@ process.on('SIGINT', function () {
 	process.exit(0);
 });
 main().catch(console.log);
+
+/**
+ * Prompt the user with some basic info about the node and the network they have
+ * connected Sidecar to.
+ *
+ * @param wsUrl websocket url of the node Sidecar is connected to
+ * @param chainName chain name of the network Sidecar is connected to
+ * @param implName implementation name of the node Sidecar is connected to
+ */
+function startUpPrompt(wsUrl: string, chainName: string, implName: string) {
+	/**
+	 * Best effort list of known public nodes that do not encourage high traffic
+	 * sidecar installations connecting to them for non - testing / development purposes.
+	 */
+	const publicWsUrls: string[] = [
+		'wss://rpc.polkadot.io',
+		'wss://cc1-1.polkadot.network',
+		'wss://kusama-rpc.polkadot.io',
+		'wss://cc3-5.kusama.network',
+		'wss://fullnode.centrifuge.io',
+		'wss://crab.darwinia.network',
+		'wss://mainnet-node.dock.io',
+		'wss://mainnet1.edgewa.re',
+		'wss://rpc.kulupu.corepaper.org/ws',
+		'wss://main1.nodleprotocol.io',
+		'wss://rpc.plasmnet.io/',
+		'wss://mainnet-rpc.stafi.io',
+		'wss://rpc.subsocial.network',
+	];
+
+	logger.info(
+		`Connected to chain ${chainName} on the ${implName} client at ${config.SUBSTRATE.URL}`
+	);
+
+	const isPublicUrl: boolean = publicWsUrls.includes(wsUrl);
+
+	if (isPublicUrl) {
+		logger.info(
+			`${wsUrl} is a public node. Too many users will overload this public endpoint. Switch to a privately hosted node when possible.`
+		);
+	}
+
+	// Split the Url to check for 2 things. Secure connection, and if its a local IP.
+	const splitUrl: string[] = wsUrl.split(':');
+	// If its 'ws' its not a secure connection.
+	const isSecure: boolean = splitUrl[0] === 'wss';
+	// Check if its a local IP.
+	const isLocal: boolean =
+		splitUrl[1] === '//127.0.0.1' || splitUrl[1] === '//localhost';
+
+	if (!isSecure && !isLocal) {
+		logger.warn(
+			`Using unencrypted connection to a public node (${wsUrl}); All traffic is sent over the internet in cleartext.`
+		);
+	}
+}

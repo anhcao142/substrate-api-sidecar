@@ -1,8 +1,40 @@
-export * from './transaction';
-export * from './accounts';
-export * from './blocks';
-export * from './runtime';
-export * from './pallets';
-export * from './node';
+import {
+	AccountsBalanceInfo,
+	AccountsStakingInfo,
+	AccountsStakingPayouts,
+	AccountsVestingInfo,
+} from './accounts';
+import { Blocks, BlocksExtrinsics } from './blocks';
+import { NodeNetwork, NodeTransactionPool, NodeVersion } from './node';
+import { PalletsStakingProgress, PalletsStorage } from './pallets';
+import { RuntimeCode, RuntimeMetadata, RuntimeSpec } from './runtime';
+import {
+	TransactionDryRun,
+	TransactionFeeEstimate,
+	TransactionMaterial,
+	TransactionSubmit,
+} from './transaction';
 
-export * as v0 from './v0';
+/**
+ * Object containing every controller class definition.
+ */
+export const controllers = {
+	Blocks,
+	BlocksExtrinsics,
+	AccountsBalanceInfo,
+	AccountsStakingInfo,
+	AccountsVestingInfo,
+	AccountsStakingPayouts,
+	PalletsStakingProgress,
+	PalletsStorage,
+	NodeNetwork,
+	NodeTransactionPool,
+	NodeVersion,
+	RuntimeCode,
+	RuntimeMetadata,
+	RuntimeSpec,
+	TransactionDryRun,
+	TransactionFeeEstimate,
+	TransactionMaterial,
+	TransactionSubmit,
+};

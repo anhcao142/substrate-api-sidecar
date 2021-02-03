@@ -2,7 +2,7 @@ version: "3.8"
 services:
   polkadot:
     container_name: polkadot
-    image: chevdor/polkadot:latest
+    image: docker.io/parity/polkadot:latest
     volumes:
       - ~/polkadot-data:/data
     # ports:

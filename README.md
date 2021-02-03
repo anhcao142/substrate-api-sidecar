@@ -22,10 +22,7 @@
 
 ## Note
 
-This a release candidate for v1.0.0 and it contains both v0 and v1 endpoints. **`substrate-api-sidecar`
-releases after Friday, October 16th, 2020, will not make any guarantees to include deprecated v0
-endpoints.** It is important that users complete the transition to the new endpoints by this date so
-they are ready for any subsequent emergency updates. Please visit the [MIGRATION_GUIDE](/MIGRATION_GUIDE.md) to
+v1.0.0 was released on 2020-10-23. This major release introduced several renamed endpoints as breaking changes. It is important that users complete the transition to the new endpoints ASAP so they are ready for any subsequent emergency updates. Please visit the [MIGRATION_GUIDE](/MIGRATION_GUIDE.md) to
 learn more.
 
 ## Prerequisites
@@ -39,10 +36,9 @@ This service requires Node version 12 or higher.
 - [Configuration](#configuration)
 - [Debugging fee and payout calculations](#debugging-fee-and-payout-calculations)
 - [Available endpoints](https://paritytech.github.io/substrate-api-sidecar/dist/)
-- [Chain compatibility](#chain-compatibility)
+- [Chain integration guide](/CHAIN_INTEGRATION.md)
 - [Docker](#docker)
 - [Note for maintainers](#note-for-maintainers)
-- [Roadmap](#roadmap)
 
 ## NPM package installation and usage
 
@@ -92,7 +88,7 @@ Simply run `yarn`.
 
 ### Rust development installation
 
-If you are looking to hack on the `calc` Rust crate make sure your machine has an [up-to-date version of `rustup`](https://www.rust-lang.org/tools/install) 
+If you are looking to hack on the `calc` Rust crate make sure your machine has an [up-to-date version of `rustup`](https://www.rust-lang.org/tools/install)
 installed to manage Rust dependencies.
 
 Install `wasm-pack` if your machine does not already have it:
@@ -114,6 +110,7 @@ yarn
 yarn dev
 
 # To build and run
+yarn build
 yarn start
 ```
 
@@ -144,18 +141,43 @@ For more information on our configuration manager visit its readme [here](https:
 #### Custom substrate types
 
 Some chains require custom type definitions in order for Sidecar to know how to decode the data
-retrieved from the node. You can define chain specific types in `config/types.json`. Read more about [defining
-types for polkadot-js here.](https://polkadot.js.org/api/start/types.extend.html)
+retrieved from the node. Sidecar pulls types for chains from [@polkadot/apps-config](https://github.com/polkadot-js/apps/tree/master/packages/apps-config), but in some cases
+the types for the chain you are trying to connect to may be out of date or may simply not exist in
+@polkadot/apps-config.
 
-If you are connecting to [Substrate Node Template](https://github.com/substrate-developer-hub/substrate-node-template), please add the following custom types in `config/types.json`.
+Sidecar affords environment variables which allow the user to specify an absolute path to a JSON file
+that contains type definitions in the corresponding formats. Consult polkadot-js/api for more info on
+the type formats (see `RegisteredTypes`).
+
+**N.B** Types set from environment variables will override the corresponding types pulled from
+@polkadot/apps-config.
+
+-   `SAS_SUBSTRATE_TYPES_BUNDLE`: a bundle of types with versioning info, type aliases, derives, and
+    rpc definitions. Format: `OverrideBundleType` (see [`typesBundle`](https://github.com/polkadot-js/api/blob/21039dec1fcad36061a96bf5526248c5fab38780/packages/types/src/types/registry.ts#L72)).
+-   `SAS_SUBSTRATE_TYPES_CHAIN`: type definitions keyed by `chainName`. Format: `Record<string, RegistryTypes>` (see [`typesChain`](https://github.com/polkadot-js/api/blob/21039dec1fcad36061a96bf5526248c5fab38780/packages/types/src/types/registry.ts#L76)).
+-   `SAS_SUBSTRATE_TYPES_SPEC`: type definitions keyed by `specName`. Format: `Record<string, RegistryTypes>` (see [`typesSpec`](https://github.com/polkadot-js/api/blob/21039dec1fcad36061a96bf5526248c5fab38780/packages/types/src/types/registry.ts#L80)).
+-   `SAS_SUBSTRATE_TYPES`: type definitions and overrides, not keyed. Format: `RegistryTypes` (see [`types`](https://github.com/polkadot-js/api/blob/21039dec1fcad36061a96bf5526248c5fab38780/packages/types/src/types/registry.ts#L64)).
+
+You can read more about [defining types for polkadot-js here.](https://polkadot.js.org/api/start/types.extend.html)
+
+##### Connecting a modified node template
+
+Polkadot-js can recognize the standard node template and inject the correct types, but if you have
+modified the name of your chain in the node template you will need to add the types manually in a
+JSON `types` file like so:
 
 ```json
+// my-chains-types.json
 {
-	"CUSTOM_TYPES": {
-		"Address": "AccountId",
-		"LookupSource": "AccountId"
-	}
+  "Address": "AccountId",
+  "LookupSource": "AccountId"
 }
+```
+
+and then set the enviroment variable to point to your definitions:
+
+```bash
+export SAS_SUBSTRATE_TYPES=/path/to/my-chains-types.json
 ```
 
 ### Logging
@@ -195,26 +217,28 @@ the console. Because this fee calculation happens in the statically compiled web
 a re-compile with the proper environment variable set is necessary:
 
 ```bash
-CALC_DEBUG=1 yarn
+CALC_DEBUG=1 sh calc/build.sh
 ```
 
 ## Available endpoints
 
 [Click here for full endpoint docs.](https://paritytech.github.io/substrate-api-sidecar/dist/)
 
-## Chain compatibility
+## Chain integration guide
 
-Sidecar should be compatible with any [Substrate](https://substrate.dev/) based chain, given
-constraints:
-
--   The chain ought to use FRAME and the `balances` pallet.
--   The chain is being finalized (by running `grandpa`).
--   If the chain is running on custom Node binaries, the JSON-RPC API should be backwards compatible
-    with the default Substrate Node.
+[Click here for chain integration guide.](/CHAIN_INTEGRATION.md)
 
 ## Docker
 
-### Build
+### Pull the latest release
+
+```bash
+docker pull docker.io/parity/substrate-api-sidecar:latest
+```
+
+The specific image tag matches the release version.
+
+### Or build from source
 
 ```bash
 yarn build:docker
@@ -233,7 +257,7 @@ docker run --rm -it --env-file .env.docker -p 8080:8080 substrate-api-sidecar
 then you can test with:
 
 ```bash
-curl -s http://0.0.0.0:8080/block | jq
+curl -s http://0.0.0.0:8080/blocks/head | jq
 ```
 
 **N.B.** The docker flow presented here is just a sample to help get started. Modifications may be necessary for secure usage.
@@ -271,10 +295,3 @@ $ rimraf lib/ && tsc
 
 To publish the new package, just follow the instructions: `git push --follow-tags origin master && npm publish.`
 You must have access to the @substrate organization on npm to publish.
-
-## Roadmap
-
-- Investigate and implement support for parachains in Sidecar. At this moment there is no concrete
-plan, but options that allow configuration and plugins specified by parachain development teams is
-one possible path forward. Initial support will be focused on enabling the workflow for core balance
-transfer and monitoring features.
