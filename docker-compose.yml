@@ -7,12 +7,11 @@ services:
       - ~/polkadot-data:/data
     # ports:
     #   - "9944:9944"
-    command: 'polkadot --chain polkadot --unsafe-ws-external --rpc-cors=all'
+    command: 'polkadot --chain polkadot --pruning="archive" --unsafe-ws-external --unsafe-rpc-external --rpc-cors=all --name="Liquid#1"'
 
   sidecar:
-    # build: .
-    image: chevdor/substrate-api-sidecar
+    build: .
     ports:
       - "8080:8080"
     environment:
-      SAS_SUBSTRATE_URL: http://polkadot-rpc.qws.cloud
+      SAS_SUBSTRATE_URL: http://polkadot:9933
