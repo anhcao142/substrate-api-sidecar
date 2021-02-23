@@ -1,7 +1,7 @@
 let imports = {};
 imports['__wbindgen_placeholder__'] = module.exports;
 let wasm;
-const { TextDecoder } = require(String.raw`util`);
+const { TextEncoder, TextDecoder } = require(String.raw`util`);
 
 const heap = new Array(32).fill(undefined);
 
@@ -11,20 +11,64 @@ function getObject(idx) { return heap[idx]; }
 
 let WASM_VECTOR_LEN = 0;
 
-let cachegetNodeBufferMemory0 = null;
-function getNodeBufferMemory0() {
-    if (cachegetNodeBufferMemory0 === null || cachegetNodeBufferMemory0.buffer !== wasm.memory.buffer) {
-        cachegetNodeBufferMemory0 = Buffer.from(wasm.memory.buffer);
+let cachegetUint8Memory0 = null;
+function getUint8Memory0() {
+    if (cachegetUint8Memory0 === null || cachegetUint8Memory0.buffer !== wasm.memory.buffer) {
+        cachegetUint8Memory0 = new Uint8Array(wasm.memory.buffer);
     }
-    return cachegetNodeBufferMemory0;
+    return cachegetUint8Memory0;
 }
 
-function passStringToWasm0(arg, malloc) {
+let cachedTextEncoder = new TextEncoder('utf-8');
 
-    const len = Buffer.byteLength(arg);
-    const ptr = malloc(len);
-    getNodeBufferMemory0().write(arg, ptr, len);
-    WASM_VECTOR_LEN = len;
+const encodeString = (typeof cachedTextEncoder.encodeInto === 'function'
+    ? function (arg, view) {
+    return cachedTextEncoder.encodeInto(arg, view);
+}
+    : function (arg, view) {
+    const buf = cachedTextEncoder.encode(arg);
+    view.set(buf);
+    return {
+        read: arg.length,
+        written: buf.length
+    };
+});
+
+function passStringToWasm0(arg, malloc, realloc) {
+
+    if (realloc === undefined) {
+        const buf = cachedTextEncoder.encode(arg);
+        const ptr = malloc(buf.length);
+        getUint8Memory0().subarray(ptr, ptr + buf.length).set(buf);
+        WASM_VECTOR_LEN = buf.length;
+        return ptr;
+    }
+
+    let len = arg.length;
+    let ptr = malloc(len);
+
+    const mem = getUint8Memory0();
+
+    let offset = 0;
+
+    for (; offset < len; offset++) {
+        const code = arg.charCodeAt(offset);
+        if (code > 0x7F) break;
+        mem[ptr + offset] = code;
+    }
+
+    if (offset !== len) {
+        if (offset !== 0) {
+            arg = arg.slice(offset);
+        }
+        ptr = realloc(ptr, len, len = offset + arg.length * 3);
+        const view = getUint8Memory0().subarray(ptr + offset, ptr + len);
+        const ret = encodeString(arg, view);
+
+        offset += ret.written;
+    }
+
+    WASM_VECTOR_LEN = offset;
     return ptr;
 }
 
@@ -105,14 +149,6 @@ let cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true 
 
 cachedTextDecoder.decode();
 
-let cachegetUint8Memory0 = null;
-function getUint8Memory0() {
-    if (cachegetUint8Memory0 === null || cachegetUint8Memory0.buffer !== wasm.memory.buffer) {
-        cachegetUint8Memory0 = new Uint8Array(wasm.memory.buffer);
-    }
-    return cachegetUint8Memory0;
-}
-
 function getStringFromWasm0(ptr, len) {
     return cachedTextDecoder.decode(getUint8Memory0().subarray(ptr, ptr + len));
 }
@@ -147,25 +183,21 @@ class CalcFee {
     }
     /**
     * @param {any} polynomial
-    * @param {BigInt} extrinsic_base_weight
     * @param {string} multiplier
     * @param {string} per_byte_fee
     * @param {string} spec_name
     * @param {number} spec_version
     * @returns {CalcFee | undefined}
     */
-    static from_params(polynomial, extrinsic_base_weight, multiplier, per_byte_fee, spec_name, spec_version) {
+    static from_params(polynomial, multiplier, per_byte_fee, spec_name, spec_version) {
         try {
-            uint64CvtShim[0] = extrinsic_base_weight;
-            const low0 = u32CvtShim[0];
-            const high0 = u32CvtShim[1];
-            var ptr1 = passStringToWasm0(multiplier, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            var ptr0 = passStringToWasm0(multiplier, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            var len0 = WASM_VECTOR_LEN;
+            var ptr1 = passStringToWasm0(per_byte_fee, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             var len1 = WASM_VECTOR_LEN;
-            var ptr2 = passStringToWasm0(per_byte_fee, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            var ptr2 = passStringToWasm0(spec_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             var len2 = WASM_VECTOR_LEN;
-            var ptr3 = passStringToWasm0(spec_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-            var len3 = WASM_VECTOR_LEN;
-            var ret = wasm.calcfee_from_params(addBorrowedObject(polynomial), low0, high0, ptr1, len1, ptr2, len2, ptr3, len3, spec_version);
+            var ret = wasm.calcfee_from_params(addBorrowedObject(polynomial), ptr0, len0, ptr1, len1, ptr2, len2, spec_version);
             return ret === 0 ? undefined : CalcFee.__wrap(ret);
         } finally {
             heap[stack_pointer++] = undefined;
@@ -174,21 +206,24 @@ class CalcFee {
     /**
     * @param {BigInt} weight
     * @param {number} len
+    * @param {BigInt} extrinsic_base_weight
     * @returns {string}
     */
-    calc_fee(weight, len) {
+    calc_fee(weight, len, extrinsic_base_weight) {
         try {
-            const retptr = wasm.__wbindgen_export_2.value - 16;
-            wasm.__wbindgen_export_2.value = retptr;
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
             uint64CvtShim[0] = weight;
             const low0 = u32CvtShim[0];
             const high0 = u32CvtShim[1];
-            wasm.calcfee_calc_fee(retptr, this.ptr, low0, high0, len);
+            uint64CvtShim[0] = extrinsic_base_weight;
+            const low1 = u32CvtShim[0];
+            const high1 = u32CvtShim[1];
+            wasm.calcfee_calc_fee(retptr, this.ptr, low0, high0, len, low1, high1);
             var r0 = getInt32Memory0()[retptr / 4 + 0];
             var r1 = getInt32Memory0()[retptr / 4 + 1];
             return getStringFromWasm0(r0, r1);
         } finally {
-            wasm.__wbindgen_export_2.value += 16;
+            wasm.__wbindgen_add_to_stack_pointer(16);
             wasm.__wbindgen_free(r0, r1);
         }
     }
@@ -232,8 +267,7 @@ class CalcPayout {
     */
     calc_payout(validator_reward_points, validator_commission, nominator_exposure, total_exposure, is_validator) {
         try {
-            const retptr = wasm.__wbindgen_export_2.value - 16;
-            wasm.__wbindgen_export_2.value = retptr;
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
             var ptr0 = passStringToWasm0(nominator_exposure, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             var len0 = WASM_VECTOR_LEN;
             var ptr1 = passStringToWasm0(total_exposure, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -243,7 +277,7 @@ class CalcPayout {
             var r1 = getInt32Memory0()[retptr / 4 + 1];
             return getStringFromWasm0(r0, r1);
         } finally {
-            wasm.__wbindgen_export_2.value += 16;
+            wasm.__wbindgen_add_to_stack_pointer(16);
             wasm.__wbindgen_free(r0, r1);
         }
     }
