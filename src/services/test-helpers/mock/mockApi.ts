@@ -1,10 +1,13 @@
 import { ApiPromise } from '@polkadot/api';
-import { Vec } from '@polkadot/types';
+import { Tuple, Vec } from '@polkadot/types';
 import { Option } from '@polkadot/types/codec';
+import { AbstractInt } from '@polkadot/types/codec/AbstractInt';
 import {
 	AccountId,
 	ActiveEraInfo,
+	AssetId,
 	Block,
+	BlockNumber,
 	EraIndex,
 	Extrinsic,
 	Hash,
@@ -12,9 +15,21 @@ import {
 	SessionIndex,
 	StakingLedger,
 } from '@polkadot/types/interfaces';
+import { Codec } from '@polkadot/types/types';
+import BN from 'bn.js';
 
+import { rococoMetadataV228 } from '../../..//test-helpers/metadata/rococoMetadata';
 import { polkadotMetadata } from '../../../test-helpers/metadata/metadata';
-import { polkadotRegistry } from '../../../test-helpers/registries';
+import { statemintV1 } from '../../../test-helpers/metadata/statemintMetadata';
+import {
+	kusamaRegistry,
+	polkadotRegistry,
+	rococoRegistry,
+} from '../../../test-helpers/registries';
+import {
+	createApiWithAugmentations,
+	TypeFactory,
+} from '../../../test-helpers/typeFactory';
 import {
 	balancesTransferValid,
 	blockHash789629,
@@ -23,6 +38,7 @@ import {
 } from '.';
 import { events789629 } from './data/events789629Hex';
 import { localListenAddressesHex } from './data/localListenAddresses';
+import traceBlockRPC from './data/traceBlock.json';
 import { validators789629Hex } from './data/validators789629Hex';
 
 const eventsAt = (_hash: Hash) =>
@@ -277,6 +293,368 @@ const referendumInfoOfAt = () =>
 	});
 
 /**
+ * ParasService specific constants
+ * The below types and constants use the rococo registry in order to properly
+ * test the ParasService with accurate metadata
+ */
+const rococoApi = createApiWithAugmentations(rococoMetadataV228);
+const rococoTypeFactory = new TypeFactory(rococoApi);
+
+/**
+ * Used for parachain crowdloans
+ */
+const funds = {
+	depositor: rococoRegistry.createType(
+		'AccountId',
+		'14E5nqKAp3oAJcmzgZhUD2RcptBeUBScxKHgJKU4HPNcKVf3'
+	),
+	verifier: null,
+	deposit: rococoRegistry.createType('Balance', 100000000000000),
+	raised: rococoRegistry.createType('Balance', 627500000000000),
+	end: rococoRegistry.createType('BlockNumber', 200000),
+	cap: rococoRegistry.createType(
+		'Balance',
+		'0x0000000000000000016345785d8a0000'
+	),
+	lastContribution: rococoRegistry.createType('LastContribution', {
+		preEnding: 6,
+	}),
+	firstSlot: rococoRegistry.createType('LeasePeriod', 13),
+	lastSlot: rococoRegistry.createType('LeasePeriod', 16),
+	trieIndex: rococoRegistry.createType('TrieIndex', 60),
+};
+
+const paraLifecycleObjectOne = {
+	onboarding: true,
+	parachain: true,
+};
+const paraLifecycleObjectTwo = {
+	parathread: true,
+	parachain: false,
+};
+const crowdloanParaId1 = rococoTypeFactory.storageKey(
+	199,
+	'ParaId',
+	rococoApi.query.crowdloan.funds
+);
+const crowdloanParaId2 = rococoTypeFactory.storageKey(
+	200,
+	'ParaId',
+	rococoApi.query.crowdloan.funds
+);
+const paraLifecycleOne = rococoRegistry.createType(
+	'ParaLifecycle',
+	paraLifecycleObjectOne
+);
+const paraLifecycleTwo = rococoRegistry.createType(
+	'ParaLifecycle',
+	paraLifecycleObjectTwo
+);
+const accountIdOne = rococoRegistry.createType(
+	'AccountId',
+	'1TYrFCWxwHA5bhiXf6uLvPfG6eEvrzzL7uiPK3Yc6yHLUqc'
+);
+const accountIdTwo = rococoRegistry.createType(
+	'AccountId',
+	'13NXiLYYzVEjXxU3eaZNcrjEX9vPyVDNNpURCzK8Bj9BiCWH'
+);
+const balanceOfOne = rococoRegistry.createType('BalanceOf', 1000000);
+const balanceOfTwo = rococoRegistry.createType('BalanceOf', 2000000);
+
+const fundsEntries = () =>
+	Promise.resolve().then(() => {
+		const optionFundInfo = rococoRegistry.createType('Option<FundInfo>', funds);
+
+		const entries = [
+			[crowdloanParaId1, optionFundInfo],
+			[crowdloanParaId2, optionFundInfo],
+		];
+
+		return entries;
+	});
+
+const fundsAt = () =>
+	Promise.resolve().then(() => {
+		return rococoRegistry.createType('Option<FundInfo>', funds);
+	});
+
+const fundsKeys = () =>
+	Promise.resolve().then(() => {
+		return [crowdloanParaId1, crowdloanParaId2];
+	});
+
+/**
+ * Used for parachain paras
+ */
+const paraLifeCycleParaId1 = rococoTypeFactory.storageKey(
+	199,
+	'ParaId',
+	rococoApi.query.paras.paraLifecycles
+);
+const paraLifeCycleParaId2 = rococoTypeFactory.storageKey(
+	200,
+	'ParaId',
+	rococoApi.query.paras.paraLifecycles
+);
+
+const parasLifecyclesEntriesAt = () =>
+	Promise.resolve().then(() => {
+		return [
+			[paraLifeCycleParaId1, paraLifecycleOne],
+			[paraLifeCycleParaId2, paraLifecycleTwo],
+		];
+	});
+
+const parasGenesisArgsAt = () =>
+	Promise.resolve().then(() => {
+		return rococoRegistry.createType('ParaGenesisArgs', { parachain: true });
+	});
+
+const upcomingParasGenesisAt = () =>
+	Promise.resolve().then(() => {
+		return rococoRegistry.createType('Option<ParaGenesisArgs>', {
+			parachain: true,
+		});
+	});
+
+const parasLifecyclesAt = () =>
+	Promise.resolve().then(() => {
+		return rococoTypeFactory.optionOf(paraLifecycleOne);
+	});
+
+/**
+ * Used for parachain leases
+ */
+const leasesParaId1 = rococoTypeFactory.storageKey(
+	199,
+	'ParaId',
+	rococoApi.query.slots.leases
+);
+const leasesParaId2 = rococoTypeFactory.storageKey(
+	200,
+	'ParaId',
+	rococoApi.query.slots.leases
+);
+const leasesTupleOne = rococoTypeFactory.tupleOf(
+	[accountIdOne, balanceOfOne],
+	['AccountId', 'BalanceOf']
+);
+const leasesTupleTwo = rococoTypeFactory.tupleOf(
+	[accountIdTwo, balanceOfTwo],
+	['AccountId', 'BalanceOf']
+);
+const parasOptionsOne = rococoTypeFactory.optionOf(leasesTupleOne);
+const parasOptionsTwo = rococoTypeFactory.optionOf(leasesTupleTwo);
+const vectorLeases = rococoTypeFactory.vecOf([
+	parasOptionsOne,
+	parasOptionsTwo,
+]);
+export const emptyVectorLeases = rococoRegistry.createType('Vec<Raw>', []);
+
+export const slotsLeasesAt = (): Promise<Vec<Option<Tuple>>> =>
+	Promise.resolve().then(() => {
+		return vectorLeases;
+	});
+
+const slotsLeasesEntriesAt = () =>
+	Promise.resolve().then(() => {
+		return [
+			[leasesParaId1, vectorLeases],
+			[leasesParaId2, vectorLeases],
+		];
+	});
+
+/**
+ * Used for parachain Auctions
+ */
+export const auctionsInfoAt = (): Promise<Option<Vec<BlockNumber>>> =>
+	Promise.resolve().then(() => {
+		const beingEnd = rococoRegistry.createType('BlockNumber', 1000);
+		const leasePeriodIndex = rococoRegistry.createType('BlockNumber', 39);
+		const vectorAuctions = rococoTypeFactory.vecOf([
+			beingEnd,
+			leasePeriodIndex,
+		]);
+		const optionAuctions = rococoTypeFactory.optionOf(vectorAuctions);
+
+		return optionAuctions;
+	});
+
+export const noneAuctionsInfoAt = (): Promise<Option<Codec>> =>
+	Promise.resolve().then(() => rococoRegistry.createType('Option<Raw>', null));
+
+const auctionCounterAt = () =>
+	Promise.resolve().then(() => {
+		const counter = new BN(4) as AbstractInt;
+
+		return counter;
+	});
+
+const auctionsWinningsAt = () =>
+	Promise.resolve().then(() => {
+		const paraId1 = rococoRegistry.createType('ParaId', 199);
+		const paraId2 = rococoRegistry.createType('ParaId', 200);
+		const tupleOne = rococoTypeFactory.tupleOf(
+			[accountIdOne, paraId1, balanceOfOne],
+			['AccountId', 'ParaId', 'BalanceOf']
+		);
+		const tupleTwo = rococoTypeFactory.tupleOf(
+			[accountIdTwo, paraId2, balanceOfTwo],
+			['AccountId', 'ParaId', 'BalanceOf']
+		);
+		const parasOptionsOne = rococoTypeFactory.optionOf(tupleOne);
+		const parasOptionsTwo = rococoTypeFactory.optionOf(tupleTwo);
+
+		// No bids for the remaining slot ranges
+		const mockWinningOptions = new Array(8).fill(
+			rococoRegistry.createType('Option<Raw>', null) // This is just `Option::None`
+		) as Option<Tuple>[];
+
+		// Total of 10 winning object, 2 `Some(..)`, 8 `None`
+		const vectorWinnings = rococoTypeFactory.vecOf([
+			parasOptionsOne,
+			parasOptionsTwo,
+			...mockWinningOptions,
+		]);
+		const optionWinnings = rococoTypeFactory.optionOf(vectorWinnings);
+
+		return optionWinnings;
+	});
+
+const traceBlock = () =>
+	Promise.resolve().then(() =>
+		kusamaRegistry.createType('TraceBlockResponse', traceBlockRPC.result)
+	);
+
+/**
+ * Asset specific constants.
+ * Note: It borrows some variables used in the parachains constant section
+ *
+ * Used in `/assets` and `/accounts` endpoints
+ */
+const statemintApiV1 = createApiWithAugmentations(statemintV1);
+const statemintTypeFactory = new TypeFactory(statemintApiV1);
+
+const falseBool = rococoRegistry.createType('bool', false);
+const trueBool = rococoRegistry.createType('bool', true);
+const assetTBalanceOne = rococoRegistry.createType('u64', 10000000);
+const assetTBalanceTwo = rococoRegistry.createType('u64', 20000000);
+
+const assetsInfo = () =>
+	Promise.resolve().then(() => {
+		const responseObj = {
+			owner: accountIdOne,
+			issue: accountIdTwo,
+			admin: accountIdTwo,
+			freezer: accountIdTwo,
+			supply: assetTBalanceOne,
+			deposit: balanceOfTwo,
+			minBalance: rococoRegistry.createType('u64', 10000),
+			isSufficient: trueBool,
+			accounts: rococoRegistry.createType('u32', 10),
+			sufficients: rococoRegistry.createType('u32', 15),
+			approvals: rococoRegistry.createType('u32', 20),
+			isFrozen: falseBool,
+		};
+
+		return rococoRegistry.createType('AssetDetails', responseObj);
+	});
+
+const assetsMetadata = () =>
+	Promise.resolve().then(() => {
+		const responseObj = {
+			deposit: balanceOfTwo,
+			name: rococoRegistry.createType('Bytes', 'statemint'),
+			symbol: rococoRegistry.createType('Bytes', 'DOT'),
+			decimals: rococoRegistry.createType('u8', 10),
+			isFrozen: falseBool,
+		};
+
+		return rococoRegistry.createType('AssetMetadata', responseObj);
+	});
+
+const assetBalanceObjOne = {
+	balance: assetTBalanceOne,
+	isFrozen: falseBool,
+	isSufficient: trueBool,
+};
+
+const assetBalanceObjTwo = {
+	balance: assetTBalanceTwo,
+	isFrozen: trueBool,
+	isSufficient: trueBool,
+};
+
+const assetBalanceObjThree = {
+	balance: assetTBalanceTwo,
+	isFrozen: falseBool,
+	isSufficient: falseBool,
+};
+
+const assetBalanceFactory = {
+	'10': rococoRegistry.createType('AssetBalance', assetBalanceObjOne),
+	'20': rococoRegistry.createType('AssetBalance', assetBalanceObjTwo),
+	'30': rococoRegistry.createType('AssetBalance', assetBalanceObjThree),
+};
+
+const assetStorageKeyOne = statemintTypeFactory.storageKey(
+	10,
+	'AssetId',
+	statemintApiV1.query.assets.asset
+);
+
+const assetStorageKeyTwo = statemintTypeFactory.storageKey(
+	20,
+	'AssetId',
+	statemintApiV1.query.assets.asset
+);
+
+const assetStorageKeyThree = statemintTypeFactory.storageKey(
+	30,
+	'AssetId',
+	statemintApiV1.query.assets.asset
+);
+
+const assetsAccountKeysAt = () =>
+	Promise.resolve().then(() => {
+		return [assetStorageKeyOne, assetStorageKeyTwo, assetStorageKeyThree];
+	});
+
+/**
+ * Attach `keysAt` to mockApi.query.assets.asset
+ */
+Object.assign(assetsInfo, {
+	keysAt: assetsAccountKeysAt,
+});
+
+/**
+ * @param assetId options are 10, 20, 30
+ */
+const assetsAccount = (assetId: number | AssetId, _address: string) => {
+	const id = typeof assetId === 'number' ? assetId : assetId.toNumber();
+
+	switch (id) {
+		case 10:
+			return assetBalanceFactory[10];
+		case 20:
+			return assetBalanceFactory[20];
+		case 30:
+			return assetBalanceFactory[30];
+		default:
+			return;
+	}
+};
+
+const assetApprovals = () =>
+	Promise.resolve().then(() => {
+		const assetObj = {
+			amount: assetTBalanceOne,
+			deposit: balanceOfTwo,
+		};
+		return rococoRegistry.createType('Option<AssetApproval>', assetObj);
+	});
+
+/**
  * Mock polkadot-js ApiPromise. Values are largely meant to be accurate for block
  * #789629, which is what most Service unit tests are based on.
  */
@@ -287,6 +665,23 @@ export const mockApi = ({
 	tx,
 	runtimeMetadata: polkadotMetadata,
 	query: {
+		assets: {
+			account: assetsAccount,
+			approvals: assetApprovals,
+			asset: assetsInfo,
+			metadata: assetsMetadata,
+		},
+		auctions: {
+			auctionInfo: {
+				at: auctionsInfoAt,
+			},
+			auctionCounter: {
+				at: auctionCounterAt,
+			},
+			winning: {
+				at: auctionsWinningsAt,
+			},
+		},
 		babe: {
 			currentSlot: { at: currentSlotAt },
 			epochIndex: { at: epochIndexAt },
@@ -295,9 +690,34 @@ export const mockApi = ({
 		balances: {
 			locks: { at: locksAt },
 		},
+		crowdloan: {
+			funds: {
+				entriesAt: fundsEntries,
+				keys: fundsKeys,
+				at: fundsAt,
+			},
+		},
+		paras: {
+			paraLifecycles: {
+				entriesAt: parasLifecyclesEntriesAt,
+				at: parasLifecyclesAt,
+			},
+			paraGenesisArgs: {
+				at: parasGenesisArgsAt,
+			},
+			upcomingParasGenesis: {
+				at: upcomingParasGenesisAt,
+			},
+		},
 		session: {
 			currentIndex: { at: currentIndexAt },
 			validators: { at: validatorsAt },
+		},
+		slots: {
+			leases: {
+				entriesAt: slotsLeasesEntriesAt,
+				at: slotsLeasesAt,
+			},
 		},
 		staking: {
 			validatorCount: { at: validatorCountAt },
@@ -326,6 +746,11 @@ export const mockApi = ({
 		},
 	},
 	consts: {
+		auctions: {
+			endingPeriod: new BN(20000),
+			sampleLength: new BN(2),
+			leasePeriodsPerSlot: undefined,
+		},
 		babe: {
 			epochDuration: polkadotRegistry.createType('u64', 2400),
 		},
@@ -339,6 +764,9 @@ export const mockApi = ({
 					negative: false,
 				},
 			],
+		},
+		slots: {
+			leasePeriod: new BN(20000),
 		},
 		staking: {
 			electionLookAhead: polkadotRegistry.createType('BlockNumber'),
@@ -359,6 +787,7 @@ export const mockApi = ({
 			getRuntimeVersion,
 			getMetadata,
 			getStorage,
+			traceBlock,
 		},
 		system: {
 			chain,

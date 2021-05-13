@@ -8,6 +8,8 @@ import AbstractController from '../AbstractController';
 
 interface ControllerOptions {
 	finalizes: boolean;
+	minCalcFeeRuntime: null | number;
+	blockWeightStore: {};
 }
 
 /**
@@ -71,7 +73,15 @@ interface ControllerOptions {
  */
 export default class BlocksController extends AbstractController<BlocksService> {
 	constructor(api: ApiPromise, private readonly options: ControllerOptions) {
-		super(api, '/blocks', new BlocksService(api));
+		super(
+			api,
+			'/blocks',
+			new BlocksService(
+				api,
+				options.minCalcFeeRuntime,
+				options.blockWeightStore
+			)
+		);
 		this.initRoutes();
 	}
 
@@ -96,9 +106,8 @@ export default class BlocksController extends AbstractController<BlocksService> 
 		const extrinsicDocsArg = extrinsicDocs === 'true';
 
 		let hash, queryFinalizedHead, omitFinalizedTag;
-
-		// If the network chain doesn't finalize blocks, we dont want a finalized tag.
 		if (!this.options.finalizes) {
+			// If the network chain doesn't finalize blocks, we dont want a finalized tag.
 			omitFinalizedTag = true;
 			queryFinalizedHead = false;
 			hash = (await this.api.rpc.chain.getHeader()).hash;

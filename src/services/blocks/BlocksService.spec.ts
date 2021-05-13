@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { ApiPromise } from '@polkadot/api';
 import { AugmentedConst } from '@polkadot/api/types/consts';
 import { RpcPromiseResult } from '@polkadot/api/types/rpc';
@@ -15,13 +14,18 @@ import { BadRequest } from 'http-errors';
 import { sanitizeNumbers } from '../../sanitize/sanitizeNumbers';
 import { createCall } from '../../test-helpers/createCall';
 import {
+	polkadotMetadata,
+	polkadotMetadataV29,
+} from '../../test-helpers/metadata/metadata';
+import {
 	kusamaRegistry,
 	polkadotRegistry,
+	polkadotRegistryV29,
 } from '../../test-helpers/registries';
+import { ExtBaseWeightValue, PerClassValue } from '../../types/chains-config';
 import { IExtrinsic } from '../../types/responses/';
 import {
 	blockHash789629,
-	getBlock,
 	mockApi,
 	mockBlock789629,
 	mockForkedBlock789629,
@@ -49,7 +53,7 @@ interface ResponseObj {
 /**
  * BlockService mock
  */
-const blocksService = new BlocksService(mockApi);
+const blocksService = new BlocksService(mockApi, 0);
 
 describe('BlocksService', () => {
 	describe('fetchBlock', () => {
@@ -91,8 +95,8 @@ describe('BlocksService', () => {
 				queryFinalizedHead: false,
 				omitFinalizedTag: false,
 			};
-
-			mockApi.rpc.chain.getBlock = (() =>
+			const tempGetBlock = mockApi.derive.chain.getBlock;
+			mockApi.derive.chain.getBlock = (() =>
 				Promise.resolve().then(() => {
 					return {
 						block: mockBlock789629BadExt,
@@ -107,7 +111,7 @@ describe('BlocksService', () => {
 				)
 			);
 
-			mockApi.rpc.chain.getBlock = (getBlock as unknown) as GetBlock;
+			mockApi.derive.chain.getBlock = (tempGetBlock as unknown) as GetBlock;
 		});
 
 		it('Returns the finalized tag as undefined when omitFinalizedTag equals true', async () => {
@@ -129,7 +133,7 @@ describe('BlocksService', () => {
 			mockApi.consts.transactionPayment.transactionByteFee = (undefined as unknown) as BalanceOf &
 				AugmentedConst<'promise'>;
 
-			const configuredBlocksService = new BlocksService(mockApi);
+			const configuredBlocksService = new BlocksService(mockApi, 0);
 
 			// fetchBlock options
 			const options = {
@@ -184,6 +188,72 @@ describe('BlocksService', () => {
 			expect(
 				calcFee?.calc_fee(BigInt(941325000000), 1247, BigInt(125000000))
 			).toBe('1257000075');
+		});
+
+		it('Should store a new runtime specific extrinsicBaseWeight when it doesnt exist', async () => {
+			// Instantiate a blocks service where we explicitly know the block store is empty.
+			const blocksServiceEmptyBlockStore = new BlocksService(mockApi, 0);
+
+			(mockApi.runtimeVersion
+				.specVersion as unknown) = polkadotRegistry.createType('u32', 20);
+			(mockApi.runtimeVersion
+				.specName as unknown) = polkadotRegistry.createType('Text', 'westend');
+
+			await blocksServiceEmptyBlockStore['createCalcFee'](
+				mockApi,
+				('0xParentHash' as unknown) as Hash,
+				mockBlock789629
+			);
+
+			expect(blocksServiceEmptyBlockStore['blockWeightStore'][20]).toBeTruthy();
+
+			(mockApi.runtimeVersion
+				.specVersion as unknown) = polkadotRegistry.createType('u32', 16);
+			(mockApi.runtimeVersion
+				.specName as unknown) = polkadotRegistry.createType('Text', 'polkadot');
+		});
+	});
+
+	describe('BlocksService.getWeight', () => {
+		const blockHash = polkadotRegistry.createType(
+			'BlockHash',
+			'0x91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3'
+		);
+
+		it('Should return correct `extrinsicBaseWeight`', async () => {
+			const weightValue = await blocksService['getWeight'](mockApi, blockHash);
+
+			expect(
+				((weightValue as unknown) as ExtBaseWeightValue).extrinsicBaseWeight
+			).toBe(BigInt(125000000));
+		});
+
+		it('Should return correct `blockWeights`', async () => {
+			const changeMetadataToV29 = () =>
+				Promise.resolve().then(() => polkadotMetadataV29);
+			const revertedMetadata = () =>
+				Promise.resolve().then(() => polkadotMetadata);
+
+			(mockApi.registry as unknown) = polkadotRegistryV29;
+			(mockApi.rpc.state.getMetadata as unknown) = changeMetadataToV29;
+
+			const weightValue = await blocksService['getWeight'](mockApi, blockHash);
+
+			expect(
+				((weightValue as unknown) as PerClassValue).perClass.normal
+					.baseExtrinsic
+			).toBe(BigInt(125000000));
+			expect(
+				((weightValue as unknown) as PerClassValue).perClass.operational
+					.baseExtrinsic
+			).toBe(BigInt(1));
+			expect(
+				((weightValue as unknown) as PerClassValue).perClass.mandatory
+					.baseExtrinsic
+			).toBe(BigInt(512000000000001));
+
+			(mockApi.registry as unknown) = polkadotRegistry;
+			(mockApi.rpc.state.getMetadata as unknown) = revertedMetadata;
 		});
 	});
 

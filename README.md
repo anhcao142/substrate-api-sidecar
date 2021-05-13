@@ -27,7 +27,7 @@ learn more.
 
 ## Prerequisites
 
-This service requires Node version 12 or higher.
+This service requires Node version 14 or higher.
 
 ## Table of contents
 
@@ -178,7 +178,7 @@ and then set the enviroment variable to point to your definitions:
 
 ```bash
 export SAS_SUBSTRATE_TYPES=/path/to/my-chains-types.json
-```
+``` 
 
 ### Logging
 
@@ -268,32 +268,66 @@ curl -s http://0.0.0.0:8080/blocks/head | jq
 
 Need help or want to contribute ideas or code? Head over to our [CONTRIBUTING](CONTRIBUTING.md) doc for more information.
 
-## Note for maintainers
+## Notes for maintainers
 
-All the commits in this repo follow the [Conventional Commits spec](https://www.conventionalcommits.org/en/v1.0.0/#summary). When merging a PR, make sure 1/ to
-use squash merge and 2/ that the title of the PR follows the Conventional Commits spec.
+### Commits
 
-The history of commits will be used to generate the `CHANGELOG`. To do so, run `yarn deploy` on the master
-branch. This command will look at all the commits since the latest tag, bump the package version according
-to semver rules, and generate a new `CHANGELOG`.
+All the commits in this repo follow the [Conventional Commits spec](https://www.conventionalcommits.org/en/v1.0.0/#summary). When merging a PR, make sure 1) to use squash merge and 2) that the title of the PR follows the Conventional Commits spec.
 
-If you don't want to follow semver or need to do a dry run, consult the [`standard-version` CLI usage](https://github.com/conventional-changelog/standard-version#cli-usag)
-docs. Flags for `standard-version` can be passed to `yarn deploy`.
+### Releases
 
-`yarn deploy`, which only does local operations and doesn't push anything, will output more or
-less the following lines:
+#### Preparation
 
-``` bash
-$ yarn deploy
-yarn run v1.21.1
-$ yarn build && standard-version -r minor
-$ rimraf lib/ && tsc
-✔ bumping version in package.json from 0.18.1 to 0.18.2
-✔ outputting changes to CHANGELOG.md
-✔ committing package.json and CHANGELOG.md
-✔ tagging release v0.18.2
-ℹ Run `git push --follow-tags origin master && npm publish` to publish
-```
+1. Checkout a branch `name-v5-0-1`. When deciding what version will be released it is important to look over 1) PRs since the last release and 2) release notes for any updated polkadot-js dependencies as they may affect type definitions.
 
-To publish the new package, just follow the instructions: `git push --follow-tags origin master && npm publish.`
-You must have access to the @substrate organization on npm to publish.
+1. Ensure we have the latest polkadot-js dependencies. Note: Every monday the polkadot-js ecosystem will usually come out with a new release. It's important that we keep up, and read the release notes for any breaking changes, or high priority updates. You can use the following command `yarn upgrade-interactive` to find and update all available releases. Feel free to update other packages that are available for upgrade if reasonable. To upgrade just `@polkadot` scoped deps use `yarn up "@polkadot/*"`
+
+    * @polkadot/api [release notes](https://github.com/polkadot-js/api/releases)
+    * @polkadot/apps-config [release notes](https://github.com/polkadot-js/apps/releases)
+    * @polkadot/util-crypto [release notes](https://github.com/polkadot-js/common/releases)
+
+1. After updating the dependencies, the next step is making sure the release will work against all noted runtimes for Polkadot, Kusama, and Westend. This can be handled via the [sidecar-runtime-test](https://github.com/TarikGul/sidecar-runtime-test) helper library. Instructions for how to run it are in the repos README.md. Before moving forward ensure all tests pass, and if it warns of any missing types feel free to make an issue [here](https://github.com/paritytech/substrate-api-sidecar/issues).
+
+1. Update the version in the package.json (this is very important for releasing on NPM).
+
+1. Update `CHANGELOG.md` by looking at merged PRs since the last release. Follow the format of previous releases. Only record dep updates if they reflect type definition updates as those affect the users API.
+
+    * Make sure to note if it is a high upgrade priority (e.g. it has type definitions for an upcoming runtime upgrade to a Parity maintained network).
+
+1. Commit with ex: `chore(release): 5.0.1`, then `git push` your release branch up, make a PR, get review approval, then merge.
+
+  * NOTE: Before pushing up as a sanity check run the 3 following commands and ensure they all run with zero errors. There is one exception with `yarn test` where you will see errors logged, that is expected as long as all the test suites pass.
+
+    ```bash
+    yarn build
+    yarn lint
+    yarn test
+    ```
+
+#### Publish on GitHub
+
+1. Now that master has the commit for the release, pull down `master` branch.
+
+1. Make sure the tag reflects your corresponding version, and run:
+
+    ```bash
+    git tag v5.0.1
+    git push origin v5.0.1
+    ```
+
+1. Go to [tags](https://github.com/paritytech/substrate-api-sidecar/tags) on github, inside of the repo, and click the three dots to the far right and select the option to create a release.
+
+1. Generally you can copy the changelog information and set the release notes to that. You can also observe past releases as a reference.
+
+#### Publish on NPM
+
+NOTE: You must be a member of the `@substrate` NPM org and must belong to the `Developers` team within the org. (Please make sure you have 2FA enabled.)
+
+1. Now that master has the commit for the release, pull down `master` branch.
+
+2. Run the following commands. (Please ensure you have 2FA enabled)
+
+    ```bash
+    npm login # Only necessary if not already logged in
+    yarn deploy # Builds JS target and then runs npm publish
+    ```

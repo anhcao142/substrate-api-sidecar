@@ -10,6 +10,7 @@ import {
 	IAddressNumberParams,
 	IAddressParam,
 	INumberParam,
+	IParaIdParam,
 } from 'src/types/requests';
 
 import { sanitizeNumbers } from '../sanitize';
@@ -19,6 +20,7 @@ type SidecarRequestHandler =
 	| RequestHandler<IAddressParam>
 	| RequestHandler<IAddressNumberParams>
 	| RequestHandler<INumberParam>
+	| RequestHandler<IParaIdParam>
 	| RequestHandler;
 
 /**
@@ -160,6 +162,15 @@ export default abstract class AbstractController<T extends AbstractService> {
 		}
 
 		return num;
+	}
+
+	protected parseQueryParamArrayOrThrow(n: string[]): number[] {
+		return n.map((str) =>
+			this.parseNumberOrThrow(
+				str,
+				`Incorrect AssetId format: ${str} is not a positive integer.`
+			)
+		);
 	}
 
 	protected verifyAndCastOr(
