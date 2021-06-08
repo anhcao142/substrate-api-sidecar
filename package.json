@@ -1,5 +1,5 @@
 {
-  "version": "6.2.1",
+  "version": "7.0.0",
   "name": "@substrate/api-sidecar",
   "description": "REST service that makes it easy to interact with blockchain nodes built using Substrate's FRAME framework.",
   "homepage": "https://github.com/paritytech/substrate-api-sidecar#readme",
@@ -37,15 +37,15 @@
     "start:log-rpc": "yarn run build && NODE_ENV=test yarn run main ",
     "dev": "tsc-watch --onSuccess \"yarn run main\"",
     "test": "substrate-exec-jest --silent",
-    "lint:runtime-tests": "cd runtime-tests && substrate-dev-run-lint",
-    "build:runtime-tests": "(cd runtime-tests && substrate-exec-tsc)",
-    "test:runtime-tests": "yarn build:runtime-tests && node ./runtime-tests/build/index.js --config=./runtime-tests/jest.config.js",
-    "test:init-runtime-tests": "python3 ./scripts/run_chain_tests.py"
+    "lint:e2e-tests": "cd e2e-tests && substrate-dev-run-lint",
+    "build:e2e-tests": "(cd e2e-tests && substrate-exec-tsc)",
+    "test:e2e-tests": "yarn build:e2e-tests && node ./e2e-tests/build/index.js --config=./e2e-tests/jest.config.js",
+    "test:init-e2e-tests": "python3 ./scripts/run_chain_tests.py"
   },
   "dependencies": {
-    "@polkadot/api": "^4.11.2",
-    "@polkadot/apps-config": "^0.91.2",
-    "@polkadot/util-crypto": "^6.5.1",
+    "@polkadot/api": "^4.13.1",
+    "@polkadot/apps-config": "^0.92.1",
+    "@polkadot/util-crypto": "^6.7.1",
     "@substrate/calc": "^0.2.0",
     "confmgr": "^1.0.6",
     "express": "^4.17.1",
