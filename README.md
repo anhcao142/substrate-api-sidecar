@@ -3,8 +3,9 @@
 
 <div align="center">
   <h1 align="center">@substrate/api-sidecar</h1>
-  <h4 align="center"> REST service that makes it easy to interact with blockchain nodes built using Substrate's FRAME framework.</h4>
-
+  <h4 align="center"> REST service that makes it easy to interact with blockchain nodes built using Substrate's 
+    <a href="https://substrate.dev/docs/en/knowledgebase/runtime/frame">FRAME</a>    
+    framework.</h4>
   <p align="center">
     <a href="https://www.npmjs.com/package/@substrate/api-sidecar">
       <img alt="npm" src="https://img.shields.io/npm/v/@substrate/api-sidecar" />
@@ -228,7 +229,7 @@ CALC_DEBUG=1 sh calc/build.sh
 
 ## Chain integration guide
 
-[Click here for chain integration guide.](/CHAIN_INTEGRATION.md)
+[Click here for chain integration guide.](./guides/CHAIN_INTEGRATION.md))
 
 ## Docker
 
@@ -252,11 +253,13 @@ yarn build:docker
 
 ```bash
 # For default use run:
-docker run --rm -it -p 8080:8080 substrate-api-sidecar
+docker run --rm -it --read-only -p 8080:8080 substrate-api-sidecar
 
 # Or if you want to use environment variables set in `.env.docker`, run:
-docker run --rm -it --env-file .env.docker -p 8080:8080 substrate-api-sidecar
+docker run --rm -it --read-only --env-file .env.docker -p 8080:8080 substrate-api-sidecar
 ```
+
+**NOTE**: While you could omit the `--read-only` flag, it is **strongly recommended for containers used in production**.
 
 then you can test with:
 
@@ -299,6 +302,8 @@ All the commits in this repo follow the [Conventional Commits spec](https://www.
     Note: that the e2e tests will connect to running nodes in order to test sidecar against real data, and they may fail owing to those connections taking too long to establish. If you run into any failures, try running tests just for the chain that failed with something like `yarn test:init-e2e-tests:polkadot`.
 
 1. Update the version in the package.json (this is very important for releasing on NPM).
+
+1. Update the substrate-api-sidecar version in the docs by going into `docs/src/openapi-v1.yaml`, and changing the `version` field under `info` to the releases respected version. Then run `yarn build:docs`. 
 
 1. Update `CHANGELOG.md` by looking at merged PRs since the last release. Follow the format of previous releases. Only record dep updates if they reflect type definition updates as those affect the users API.
 
