@@ -40,6 +40,9 @@
             "tip": null,
             "hash": "0x71db73f038bd790ada81a40728825857a49d543ab40c5b63de69b8588737712f",
             "info": {},
+            "era": {
+                "immortalEra": "0x00"
+            },
             "events": [
                 {
                     "method": {
@@ -71,6 +74,9 @@
             "tip": null,
             "hash": "0x47db276250fd90bd16a5e62592531bb7f41fd0c350b3bff388d4e8accf8116c3",
             "info": {},
+            "era": {
+                "immortalEra": "0x00"
+            },
             "events": [
                 {
                     "method": {
@@ -102,6 +108,9 @@
             "tip": null,
             "hash": "0xcf52705d1ade64fc0b05859ac28358c0770a217dd76b75e586ae848c56ae810d",
             "info": {},
+            "era": {
+                "immortalEra": "0x00"
+            },
             "events": [
                 {
                     "method": {
@@ -137,9 +146,13 @@
             "tip": "0",
             "hash": "0x3f5a8e3b5dae4e28252d98e8464f29b50b08a49a36cf71ac009c9a791c1ffa82",
             "info": {
-                "weight": "195000000",
-                "class": "Normal",
-                "partialFee": "3333333"
+                "error": "Fee calculation not supported for 1062#kusama"
+            },
+            "era": {
+                "mortalEra": [
+                    "64",
+                    "33"
+                ]
             },
             "events": [
                 {

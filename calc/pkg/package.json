@@ -4,7 +4,7 @@
     "Parity Technologies <admin@parity.io>"
   ],
   "description": "Off-chain calculations for @substrate/api-sidecar.",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -13,7 +13,6 @@
   "files": [
     "calc_bg.wasm",
     "calc.js",
-    "calc_bg.js",
     "calc.d.ts"
   ],
   "main": "calc.js",

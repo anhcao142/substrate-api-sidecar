@@ -40,6 +40,9 @@
             "tip": null,
             "hash": "0xfa02378f10df430e40772f77dfc7830511794475c798311925b81bd6bb6add4a",
             "info": {},
+            "era": {
+                "immortalEra": "0x00"
+            },
             "events": [
                 {
                     "method": {
@@ -81,7 +84,13 @@
             "info": {
                 "weight": "182428000",
                 "class": "Normal",
-                "partialFee": "51999517"
+                "partialFee": "2599999269"
+            },
+            "era": {
+                "mortalEra": [
+                    "64",
+                    "13"
+                ]
             },
             "events": [
                 {
@@ -143,7 +152,13 @@
             "info": {
                 "weight": "63399913000",
                 "class": "Normal",
-                "partialFee": "51334543"
+                "partialFee": "2566750239"
+            },
+            "era": {
+                "mortalEra": [
+                    "64",
+                    "12"
+                ]
             },
             "events": [
                 {
@@ -236,7 +251,13 @@
             "info": {
                 "weight": "627217000",
                 "class": "Normal",
-                "partialFee": "80665909"
+                "partialFee": "4033332622"
+            },
+            "era": {
+                "mortalEra": [
+                    "64",
+                    "12"
+                ]
             },
             "events": [
                 {
@@ -327,7 +348,13 @@
             "info": {
                 "weight": "63399913000",
                 "class": "Normal",
-                "partialFee": "51334543"
+                "partialFee": "2566750239"
+            },
+            "era": {
+                "mortalEra": [
+                    "64",
+                    "13"
+                ]
             },
             "events": [
                 {
@@ -420,7 +447,13 @@
             "info": {
                 "weight": "423471000",
                 "class": "Normal",
-                "partialFee": "80665904"
+                "partialFee": "4033332350"
+            },
+            "era": {
+                "mortalEra": [
+                    "64",
+                    "13"
+                ]
             },
             "events": [
                 {
@@ -477,7 +510,13 @@
             "info": {
                 "weight": "63399913000",
                 "class": "Normal",
-                "partialFee": "51334543"
+                "partialFee": "2566750239"
+            },
+            "era": {
+                "mortalEra": [
+                    "64",
+                    "13"
+                ]
             },
             "events": [
                 {
@@ -558,7 +597,13 @@
             "info": {
                 "weight": "423471000",
                 "class": "Normal",
-                "partialFee": "66999374"
+                "partialFee": "3349999290"
+            },
+            "era": {
+                "mortalEra": [
+                    "64",
+                    "13"
+                ]
             },
             "events": [
                 {
@@ -638,7 +683,13 @@
             "info": {
                 "weight": "63399913000",
                 "class": "Normal",
-                "partialFee": "51334543"
+                "partialFee": "2566750239"
+            },
+            "era": {
+                "mortalEra": [
+                    "64",
+                    "13"
+                ]
             },
             "events": [
                 {
@@ -731,7 +782,13 @@
             "info": {
                 "weight": "423471000",
                 "class": "Normal",
-                "partialFee": "80665904"
+                "partialFee": "4033332350"
+            },
+            "era": {
+                "mortalEra": [
+                    "64",
+                    "13"
+                ]
             },
             "events": [
                 {
@@ -788,7 +845,13 @@
             "info": {
                 "weight": "63399913000",
                 "class": "Normal",
-                "partialFee": "51001213"
+                "partialFee": "2550083579"
+            },
+            "era": {
+                "mortalEra": [
+                    "64",
+                    "13"
+                ]
             },
             "events": [
                 {
@@ -869,7 +932,13 @@
             "info": {
                 "weight": "423471000",
                 "class": "Normal",
-                "partialFee": "66666044"
+                "partialFee": "3333332630"
+            },
+            "era": {
+                "mortalEra": [
+                    "64",
+                    "14"
+                ]
             },
             "events": [
                 {

@@ -1,43 +1,94 @@
 import { ApiPromise } from '@polkadot/api';
+import { ApiDecoration } from '@polkadot/api/types';
 import { AugmentedConst } from '@polkadot/api/types/consts';
 import { RpcPromiseResult } from '@polkadot/api/types/rpc';
-import { GenericExtrinsic } from '@polkadot/types';
+import { GenericExtrinsic, u128 } from '@polkadot/types';
 import { GenericCall } from '@polkadot/types/generic';
-import {
-	BalanceOf,
-	BlockHash,
-	Hash,
-	SignedBlock,
-} from '@polkadot/types/interfaces';
+import { BlockHash, Hash, SignedBlock } from '@polkadot/types/interfaces';
 import { BadRequest } from 'http-errors';
 import LRU from 'lru-cache';
 
 import { sanitizeNumbers } from '../../sanitize/sanitizeNumbers';
 import { createCall } from '../../test-helpers/createCall';
-import {
-	polkadotMetadata,
-	polkadotMetadataV29,
-} from '../../test-helpers/metadata/metadata';
+import { polkadotMetadataV29 } from '../../test-helpers/metadata/metadata';
 import {
 	kusamaRegistry,
 	polkadotRegistry,
-	polkadotRegistryV29,
 } from '../../test-helpers/registries';
+import { createApiWithAugmentations } from '../../test-helpers/typeFactory';
 import { ExtBaseWeightValue, PerClassValue } from '../../types/chains-config';
 import { IBlock, IExtrinsic } from '../../types/responses/';
 import {
 	blockHash20000,
 	blockHash100000,
 	blockHash789629,
-	mockApi,
+	defaultMockApi,
 	mockBlock789629,
 	mockForkedBlock789629,
 } from '../test-helpers/mock';
 import block789629 from '../test-helpers/mock/data/block789629.json';
+import { events789629 } from '../test-helpers/mock/data/events789629Hex';
+import { validators789629Hex } from '../test-helpers/mock/data/validators789629Hex';
 import { parseNumberOrThrow } from '../test-helpers/mock/parseNumberOrThrow';
 import block789629Extrinsic from '../test-helpers/responses/blocks/block789629Extrinsic.json';
 import blocks789629Response from '../test-helpers/responses/blocks/blocks789629.json';
 import { BlocksService } from './BlocksService';
+
+const validatorsAt = (_hash: Hash) =>
+	Promise.resolve().then(() =>
+		polkadotRegistry.createType('Vec<ValidatorId>', validators789629Hex)
+	);
+
+const eventsAt = (_hash: Hash) =>
+	Promise.resolve().then(() =>
+		polkadotRegistry.createType('Vec<EventRecord>', events789629)
+	);
+
+const nextFeeMultiplierAt = (_hash: Hash) =>
+	Promise.resolve().then(() =>
+		polkadotRegistry.createType('Fixed128', 1000000000)
+	);
+
+const mockHistoricApi = {
+	registry: polkadotRegistry,
+	consts: {
+		transactionPayment: {
+			transactionByteFee: polkadotRegistry.createType('Balance', 1000000),
+			weightToFee: [
+				{
+					coeffFrac: polkadotRegistry.createType('Perbill', 80000000),
+					coeffInteger: polkadotRegistry.createType('Balance', 0),
+					degree: polkadotRegistry.createType('u8', 1),
+					negative: false,
+				},
+			],
+		},
+		system: {
+			extrinsicBaseWeight: polkadotRegistry.createType('u64', 125000000),
+		},
+	},
+	query: {
+		session: {
+			validators: validatorsAt,
+		},
+		system: {
+			events: eventsAt,
+		},
+		transactionPayment: {
+			nextFeeMultiplier: nextFeeMultiplierAt,
+		},
+	},
+} as unknown as ApiDecoration<'promise'>;
+
+const mockApi = {
+	...defaultMockApi,
+	query: {
+		transactionPayment: {
+			nextFeeMultiplier: { at: nextFeeMultiplierAt },
+		},
+	},
+	at: (_hash: Hash) => mockHistoricApi,
+} as unknown as ApiPromise;
 
 /**
  * For type casting mock getBlock functions so tsc does not complain
@@ -77,7 +128,11 @@ describe('BlocksService', () => {
 
 			expect(
 				sanitizeNumbers(
-					await blocksService.fetchBlock(blockHash789629, options)
+					await blocksService.fetchBlock(
+						blockHash789629,
+						mockHistoricApi,
+						options
+					)
 				)
 			).toMatchObject(blocks789629Response);
 		});
@@ -105,8 +160,8 @@ describe('BlocksService', () => {
 				queryFinalizedHead: false,
 				omitFinalizedTag: false,
 			};
-			const tempGetBlock = mockApi.derive.chain.getBlock;
-			mockApi.derive.chain.getBlock = (() =>
+			const tempGetBlock = mockApi.rpc.chain.getBlock;
+			mockApi.rpc.chain.getBlock = (() =>
 				Promise.resolve().then(() => {
 					return {
 						block: mockBlock789629BadExt,
@@ -114,14 +169,14 @@ describe('BlocksService', () => {
 				}) as unknown) as GetBlock;
 
 			await expect(
-				blocksService.fetchBlock(blockHash789629, options)
+				blocksService.fetchBlock(blockHash789629, mockHistoricApi, options)
 			).rejects.toThrow(
 				new Error(
 					`Cannot destructure property 'method' of 'extrinsic' as it is undefined.`
 				)
 			);
 
-			mockApi.derive.chain.getBlock = tempGetBlock as unknown as GetBlock;
+			mockApi.rpc.chain.getBlock = tempGetBlock as unknown as GetBlock;
 		});
 
 		it('Returns the finalized tag as undefined when omitFinalizedTag equals true', async () => {
@@ -136,14 +191,18 @@ describe('BlocksService', () => {
 				omitFinalizedTag: true,
 			};
 
-			const block = await blocksService.fetchBlock(blockHash789629, options);
+			const block = await blocksService.fetchBlock(
+				blockHash789629,
+				mockHistoricApi,
+				options
+			);
 
 			expect(block.finalized).toEqual(undefined);
 		});
 
 		it('Return an error with a null calcFee when perByte is undefined', async () => {
-			mockApi.consts.transactionPayment.transactionByteFee =
-				undefined as unknown as BalanceOf & AugmentedConst<'promise'>;
+			mockHistoricApi.consts.transactionPayment.transactionByteFee =
+				undefined as unknown as u128 & AugmentedConst<'promise'>;
 
 			const configuredBlocksService = new BlocksService(mockApi, 0, new LRU());
 
@@ -157,15 +216,19 @@ describe('BlocksService', () => {
 			};
 
 			const response = sanitizeNumbers(
-				await configuredBlocksService.fetchBlock(blockHash789629, options)
+				await configuredBlocksService.fetchBlock(
+					blockHash789629,
+					mockHistoricApi,
+					options
+				)
 			);
 
 			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 			const responseObj: ResponseObj = JSON.parse(JSON.stringify(response));
 
 			// Revert mockApi back to its original setting that was changed above.
-			mockApi.consts.transactionPayment.transactionByteFee =
-				polkadotRegistry.createType('Balance', 1000000) as BalanceOf &
+			mockHistoricApi.consts.transactionPayment.transactionByteFee =
+				polkadotRegistry.createType('Balance', 1000000) as u128 &
 					AugmentedConst<'promise'>;
 
 			expect(responseObj.extrinsics[3].info).toEqual({
@@ -181,6 +244,7 @@ describe('BlocksService', () => {
 			// tx hash: 0x6d6c0e955650e689b14fb472daf14d2bdced258c748ded1d6cb0da3bfcc5854f
 			const { calcFee } = await blocksService['createCalcFee'](
 				mockApi,
+				mockHistoricApi,
 				'0xParentHash' as unknown as Hash,
 				mockBlock789629
 			);
@@ -196,6 +260,7 @@ describe('BlocksService', () => {
 			// tx hash: 0xc96b4d442014fae60c932ea50cba30bf7dea3233f59d1fe98c6f6f85bfd51045
 			const { calcFee } = await blocksService['createCalcFee'](
 				mockApi,
+				mockHistoricApi,
 				'0xParentHash' as unknown as Hash,
 				mockBlock789629
 			);
@@ -218,6 +283,7 @@ describe('BlocksService', () => {
 
 			await blocksServiceEmptyBlockStore['createCalcFee'](
 				mockApi,
+				mockHistoricApi,
 				'0xParentHash' as unknown as Hash,
 				mockBlock789629
 			);
@@ -232,35 +298,26 @@ describe('BlocksService', () => {
 	});
 
 	describe('BlocksService.getWeight', () => {
-		const blockHash = polkadotRegistry.createType(
-			'BlockHash',
-			'0x91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3'
-		);
-
-		it('Should return correct `extrinsicBaseWeight`', async () => {
+		it('Should return correct `extrinsicBaseWeight`', () => {
 			// Reset LRU cache
 			cache.reset();
 
-			const weightValue = await blocksService['getWeight'](mockApi, blockHash);
+			const weightValue = blocksService['getWeight'](mockHistoricApi);
 
 			expect(
 				(weightValue as unknown as ExtBaseWeightValue).extrinsicBaseWeight
 			).toBe(BigInt(125000000));
 		});
 
-		it('Should return correct `blockWeights`', async () => {
+		it('Should return correct `blockWeights`', () => {
 			// Reset LRU cache
 			cache.reset();
 
-			const changeMetadataToV29 = () =>
-				Promise.resolve().then(() => polkadotMetadataV29);
-			const revertedMetadata = () =>
-				Promise.resolve().then(() => polkadotMetadata);
+			const historicApi = createApiWithAugmentations(
+				polkadotMetadataV29.toHex()
+			) as ApiDecoration<'promise'>;
 
-			(mockApi.registry as unknown) = polkadotRegistryV29;
-			(mockApi.rpc.state.getMetadata as unknown) = changeMetadataToV29;
-
-			const weightValue = await blocksService['getWeight'](mockApi, blockHash);
+			const weightValue = blocksService['getWeight'](historicApi);
 
 			expect(
 				(weightValue as unknown as PerClassValue).perClass.normal.baseExtrinsic
@@ -273,9 +330,6 @@ describe('BlocksService', () => {
 				(weightValue as unknown as PerClassValue).perClass.mandatory
 					.baseExtrinsic
 			).toBe(BigInt(512000000000001));
-
-			(mockApi.registry as unknown) = polkadotRegistry;
-			(mockApi.rpc.state.getMetadata as unknown) = revertedMetadata;
 		});
 	});
 
@@ -497,7 +551,11 @@ describe('BlocksService', () => {
 			// Reset LRU cache
 			cache.reset();
 
-			const block = await blocksService.fetchBlock(blockHash789629, options);
+			const block = await blocksService.fetchBlock(
+				blockHash789629,
+				mockHistoricApi,
+				options
+			);
 
 			/**
 			 * The `extrinsicIndex` (second param) is being tested for a non-zero
@@ -514,7 +572,11 @@ describe('BlocksService', () => {
 			// Reset LRU cache
 			cache.reset();
 
-			const block = await blocksService.fetchBlock(blockHash789629, options);
+			const block = await blocksService.fetchBlock(
+				blockHash789629,
+				mockHistoricApi,
+				options
+			);
 
 			expect(() => {
 				blocksService['fetchExtrinsicByIndex'](block, 5);
@@ -546,13 +608,13 @@ describe('BlocksService', () => {
 				logs: [
 					{
 						preRuntime: [
-							'0x45424142',
+							'0x42414245',
 							'0x036d000000f4f4d80f00000000ec9bd8e2d0368c97f3d888837f7283bbe08266869eb613159db547905026c2502a70f168b9ffcc233344005d11ebecd166769200d270a2eaa642118a00acb708a0487a440b0caf3dd5c91ab173e80ddfe5735ef8b938ea87a6105a1161612707',
 						],
 					},
 					{
 						seal: [
-							'0x45424142',
+							'0x42414245',
 							'0xae78514e1de84a7d32e55b9b652f9d408ab1f7b4bfdbf6b2fad9cad94a91b86b0161cabf08f5ae1d3a1aa4993e2d96d56c94b03cee0898ccb8385a546084f88b',
 						],
 					},
@@ -594,8 +656,8 @@ describe('BlocksService', () => {
 			// Reset LRU cache
 			cache.reset();
 
-			await blocksService.fetchBlock(blockHash789629, options);
-			await blocksService.fetchBlock(blockHash20000, options);
+			await blocksService.fetchBlock(blockHash789629, mockHistoricApi, options);
+			await blocksService.fetchBlock(blockHash20000, mockHistoricApi, options);
 
 			expect(cache.length).toBe(2);
 		});
@@ -604,9 +666,9 @@ describe('BlocksService', () => {
 			// Reset LRU cache
 			cache.reset();
 
-			await blocksService.fetchBlock(blockHash789629, options);
-			await blocksService.fetchBlock(blockHash20000, options);
-			await blocksService.fetchBlock(blockHash100000, options);
+			await blocksService.fetchBlock(blockHash789629, mockHistoricApi, options);
+			await blocksService.fetchBlock(blockHash20000, mockHistoricApi, options);
+			await blocksService.fetchBlock(blockHash100000, mockHistoricApi, options);
 
 			expect(cache.get(blockHash789629.toString())).toBe(undefined);
 			expect(cache.length).toBe(2);
