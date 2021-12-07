@@ -1,12 +1,12 @@
 /**
  * String literal for specific chains that are being tested for
  */
-export type ChainSpec = 'polkadot' | 'kusama' | 'westend';
+export type ChainSpec = 'polkadot' | 'kusama' | 'westend' | 'statemine';
 
 /**
  * Sidecar endpoints that are supported
  */
-export type EndpointSpec = 'blocks' | 'accounts' | 'runtime';
+export type EndpointSpec = 'blocks' | 'accounts' | 'runtime' | 'paras';
 
 /**
  * Chain object and the associated endpoints
@@ -27,4 +27,5 @@ export interface IChains {
 	kusama: ChainEndpoints;
 	polkadot: ChainEndpoints;
 	westend: ChainEndpoints;
+	statemine: ChainEndpoints;
 }

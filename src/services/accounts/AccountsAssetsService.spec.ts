@@ -1,5 +1,6 @@
 import { ApiPromise } from '@polkadot/api';
-import { AssetId } from '@polkadot/types/interfaces';
+import { ApiDecoration } from '@polkadot/api/types';
+import { AssetId, Hash } from '@polkadot/types/interfaces';
 import { PalletAssetsAssetBalance } from '@polkadot/types/lookup';
 
 import { sanitizeNumbers } from '../../sanitize/sanitizeNumbers';
@@ -80,9 +81,9 @@ const assetBalanceObjThree = {
 };
 
 const assetBalanceFactory = {
-	'10': assetBalanceObjOne as PalletAssetsAssetBalance,
-	'20': assetBalanceObjTwo as PalletAssetsAssetBalance,
-	'30': assetBalanceObjThree as PalletAssetsAssetBalance,
+	'10': assetBalanceObjOne as unknown as PalletAssetsAssetBalance,
+	'20': assetBalanceObjTwo as unknown as PalletAssetsAssetBalance,
+	'30': assetBalanceObjThree as unknown as PalletAssetsAssetBalance,
 };
 
 const assetStorageKeyOne = statemintTypeFactory.storageKey(
@@ -109,17 +110,18 @@ const assetsAccountKeysAt = () =>
 	});
 
 /**
- * Attach `keysAt` to mockApi.query.assets.asset
+ * Attach `keys` to mockApi.query.assets.asset
  */
 Object.assign(assetsInfo, {
-	keysAt: assetsAccountKeysAt,
+	keys: assetsAccountKeysAt,
 });
 
 /**
  * @param assetId options are 10, 20, 30
  */
 const assetsAccount = (assetId: number | AssetId, _address: string) => {
-	const id = typeof assetId === 'number' ? assetId : assetId.toNumber();
+	const id =
+		typeof assetId === 'number' ? assetId : parseInt(assetId.toString());
 
 	switch (id) {
 		case 10:
@@ -142,8 +144,7 @@ const assetApprovals = () =>
 		return rococoRegistry.createType('Option<AssetApproval>', assetObj);
 	});
 
-const mockApi = {
-	...defaultMockApi,
+const historicApi = {
 	query: {
 		assets: {
 			account: assetsAccount,
@@ -152,6 +153,11 @@ const mockApi = {
 			metadata: assetsMetadata,
 		},
 	},
+} as unknown as ApiDecoration<'promise'>;
+
+const mockApi = {
+	...defaultMockApi,
+	at: (_hash: Hash) => historicApi,
 } as unknown as ApiPromise;
 
 const accountsAssetsService = new AccountsAssetsService(mockApi);
