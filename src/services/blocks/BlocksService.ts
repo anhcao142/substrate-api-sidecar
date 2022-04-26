@@ -1,13 +1,13 @@
 import { ApiPromise } from '@polkadot/api';
 import { ApiDecoration } from '@polkadot/api/types';
 import { extractAuthor } from '@polkadot/api-derive/type/util';
-import { Compact, GenericCall, Struct, Vec } from '@polkadot/types';
+import { Compact, GenericCall, Struct, u128, Vec } from '@polkadot/types';
 import {
 	AccountId32,
+	Balance,
 	Block,
 	BlockHash,
 	BlockNumber,
-	BlockWeights,
 	DispatchInfo,
 	EventRecord,
 	Hash,
@@ -22,7 +22,6 @@ import { BadRequest, InternalServerError } from 'http-errors';
 import LRU from 'lru-cache';
 
 import {
-	BlockWeightStore,
 	IPerClass,
 	isExtBaseWeightValue,
 	isPerClassValue,
@@ -69,8 +68,7 @@ export class BlocksService extends AbstractService {
 	constructor(
 		api: ApiPromise,
 		private minCalcFeeRuntime: IOption<number>,
-		private blockStore: LRU<string, IBlock>,
-		private blockWeightStore: BlockWeightStore = {}
+		private blockStore: LRU<string, IBlock>
 	) {
 		super(api);
 	}
@@ -167,7 +165,7 @@ export class BlocksService extends AbstractService {
 			};
 		}
 
-		let calcFee, specName, specVersion;
+		let calcFee, specName, specVersion, weights;
 		if (this.minCalcFeeRuntime === null) {
 			// Don't bother with trying to create calcFee for a runtime where fee calcs are not supported
 			specVersion = -1;
@@ -184,6 +182,7 @@ export class BlocksService extends AbstractService {
 			calcFee = createCalcFee.calcFee;
 			specName = createCalcFee.specName;
 			specVersion = createCalcFee.specVersion;
+			weights = createCalcFee.weights;
 		}
 
 		for (let idx = 0; idx < block.extrinsics.length; ++idx) {
@@ -260,13 +259,11 @@ export class BlocksService extends AbstractService {
 			 * https://github.com/polkadot-js/api/issues/2365
 			 */
 			// This makes the compiler happy for below type guards
-			const weightStored = this.blockWeightStore[specVersion];
 			let extrinsicBaseWeight;
-			if (isExtBaseWeightValue(weightStored)) {
-				extrinsicBaseWeight = weightStored.extrinsicBaseWeight;
-			} else if (isPerClassValue(weightStored)) {
-				extrinsicBaseWeight =
-					weightStored.perClass[weightInfoClass]?.baseExtrinsic;
+			if (isExtBaseWeightValue(weights)) {
+				extrinsicBaseWeight = weights.extrinsicBaseWeight;
+			} else if (isPerClassValue(weights)) {
+				extrinsicBaseWeight = weights.perClass[weightInfoClass]?.baseExtrinsic;
 			}
 
 			if (!extrinsicBaseWeight) {
@@ -475,6 +472,7 @@ export class BlocksService extends AbstractService {
 	 * Create calcFee from params or return `null` if calcFee cannot be created.
 	 *
 	 * @param api ApiPromise
+	 * @param historicApi ApiDecoration to use for runtime specific querying
 	 * @param parentHash Hash of the parent block
 	 * @param block Block which the extrinsic is from
 	 */
@@ -509,7 +507,8 @@ export class BlocksService extends AbstractService {
 		const multiplier =
 			await api.query.transactionPayment?.nextFeeMultiplier?.at(parentHash);
 
-		const perByte = historicApi.consts.transactionPayment?.transactionByteFee;
+		const perByte = this.getPerByte(historicApi);
+
 		const extrinsicBaseWeightExists =
 			historicApi.consts.system.extrinsicBaseWeight ||
 			historicApi.consts.system.blockWeights.perClass.normal.baseExtrinsic;
@@ -535,9 +534,7 @@ export class BlocksService extends AbstractService {
 			};
 		});
 
-		// Now that we know the exact runtime supports fee calcs, make sure we have
-		// the weights in the store
-		this.blockWeightStore[specVersion] ||= this.getWeight(historicApi);
+		const weights = this.getWeight(historicApi);
 
 		const calcFee = CalcFee.from_params(
 			coefficients,
@@ -551,15 +548,38 @@ export class BlocksService extends AbstractService {
 			calcFee,
 			specName,
 			specVersion,
+			weights,
 		};
 	}
 
 	/**
-	 *	Get a formatted blockweight store value for the runtime corresponding to the given block hash.
+	 * Retrieve the PerByte integer used to calculate fees.
+	 * TransactionByteFee has been replaced with LengthToFee via runtime 9190.
+	 * https://github.com/paritytech/polkadot/pull/5028
+	 *
+	 * @param historicApi ApiDecoration to use for runtime specific querying
+	 */
+	private getPerByte(
+		historicApi: ApiDecoration<'promise'>
+	): Balance | u128 | null {
+		const { transactionPayment } = historicApi.consts;
+
+		if (transactionPayment?.transactionByteFee) {
+			return transactionPayment?.transactionByteFee as Balance;
+		}
+
+		if (transactionPayment?.lengthToFee) {
+			return transactionPayment?.lengthToFee.toArray()[0].coeffInteger;
+		}
+
+		return null;
+	}
+
+	/**
+	 * Get a formatted weight constant for the runtime corresponding to the given block hash.
 	 *
 	 * @param api ApiPromise
 	 * @param blockHash Hash of a block in the runtime to get the extrinsic base weight(s) for
-	 * @returns formatted block weight store entry
 	 */
 	private getWeight(historicApi: ApiDecoration<'promise'>): WeightValue {
 		const {
@@ -567,10 +587,8 @@ export class BlocksService extends AbstractService {
 		} = historicApi;
 
 		let weightValue;
-		if ((system.blockWeights as unknown as BlockWeights)?.perClass) {
-			const { normal, operational, mandatory } = (
-				system.blockWeights as unknown as BlockWeights
-			)?.perClass;
+		if (system.blockWeights?.perClass) {
+			const { normal, operational, mandatory } = system.blockWeights?.perClass;
 
 			const perClass = {
 				normal: {

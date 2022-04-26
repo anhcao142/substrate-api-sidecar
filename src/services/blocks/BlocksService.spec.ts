@@ -2,20 +2,21 @@ import { ApiPromise } from '@polkadot/api';
 import { ApiDecoration } from '@polkadot/api/types';
 import { AugmentedConst } from '@polkadot/api/types';
 import { PromiseRpcResult } from '@polkadot/api-base/types/rpc';
-import { GenericExtrinsic, u128 } from '@polkadot/types';
+import { GenericExtrinsic, u128, Vec } from '@polkadot/types';
 import { GenericCall } from '@polkadot/types/generic';
 import { BlockHash, Hash, SignedBlock } from '@polkadot/types/interfaces';
+import { FrameSupportWeightsWeightToFeeCoefficient } from '@polkadot/types/lookup';
 import { BadRequest } from 'http-errors';
 import LRU from 'lru-cache';
 
 import { sanitizeNumbers } from '../../sanitize/sanitizeNumbers';
 import { createCall } from '../../test-helpers/createCall';
-import { polkadotMetadataV29 } from '../../test-helpers/metadata/metadata';
 import {
 	kusamaRegistry,
 	polkadotRegistry,
+	polkadotRegistryV9190,
 } from '../../test-helpers/registries';
-import { createApiWithAugmentations } from '../../test-helpers/typeFactory';
+import { TypeFactory } from '../../test-helpers/typeFactory';
 import { ExtBaseWeightValue, PerClassValue } from '../../types/chains-config';
 import { IBlock, IExtrinsic } from '../../types/responses/';
 import {
@@ -265,31 +266,54 @@ describe('BlocksService', () => {
 				calcFee?.calc_fee(BigInt(941325000000), 1247, BigInt(125000000))
 			).toBe('1257000075');
 		});
+	});
 
-		it('Should store a new runtime specific extrinsicBaseWeight when it doesnt exist', async () => {
+	describe('getPerByte', () => {
+		it('Correctly handles LengthToFee', () => {
 			// Reset LRU cache
 			cache.reset();
 
-			const blocksServiceEmptyBlockStore = new BlocksService(mockApi, 0, cache);
+			/**
+			 * Setup a mockApiClone specific to v9190
+			 */
+			const mockHistoricApiClone = {
+				...mockHistoricApi,
+				registry: polkadotRegistryV9190,
+			} as unknown as ApiDecoration<'promise'>;
 
-			(mockApi.runtimeVersion.specVersion as unknown) =
-				polkadotRegistry.createType('u32', 20);
-			(mockApi.runtimeVersion.specName as unknown) =
-				polkadotRegistry.createType('Text', 'westend');
-
-			await blocksServiceEmptyBlockStore['createCalcFee'](
-				mockApi,
-				mockHistoricApi,
-				'0xParentHash' as unknown as Hash,
-				mockBlock789629
+			/**
+			 * Typecast here because the typefactory just needs the registry so this is safe.
+			 * It's a shortcut so that constructing a augmented api is not necessary.
+			 */
+			const polkadotV9190TypeFactory = new TypeFactory(
+				mockHistoricApiClone as ApiPromise
 			);
 
-			expect(blocksServiceEmptyBlockStore['blockWeightStore'][20]).toBeTruthy();
+			/**
+			 * Create a Vec<FrameSupportWeightsWeightToFeeCoefficient> type
+			 * The `coeffInteger` value here should be different from
+			 * `transactionByteFee` set in mockHistoricApi in order to properly
+			 * distinquish values.
+			 */
+			const lengthToFeeStruct = polkadotRegistryV9190.createType(
+				'FrameSupportWeightsWeightToFeeCoefficient',
+				{ coeffInteger: 12345678 }
+			);
+			const lengthToFee = polkadotV9190TypeFactory.vecOf([lengthToFeeStruct]);
 
-			(mockApi.runtimeVersion.specVersion as unknown) =
-				polkadotRegistry.createType('u32', 16);
-			(mockApi.runtimeVersion.specName as unknown) =
-				polkadotRegistry.createType('Text', 'polkadot');
+			/**
+			 * Remove TransactionByteFee from our clone and replace it with LengthToFee
+			 */
+			(mockHistoricApiClone.consts.transactionPayment[
+				'transactionByteFee'
+			] as unknown) = undefined;
+			mockHistoricApiClone.consts.transactionPayment['lengthToFee'] =
+				lengthToFee as unknown as Vec<FrameSupportWeightsWeightToFeeCoefficient> &
+					AugmentedConst<'promise'>;
+
+			const result = blocksService['getPerByte'](mockHistoricApiClone);
+
+			expect(sanitizeNumbers(result)).toEqual('12345678');
 		});
 	});
 
@@ -309,11 +333,31 @@ describe('BlocksService', () => {
 			// Reset LRU cache
 			cache.reset();
 
-			const historicApi = createApiWithAugmentations(
-				polkadotMetadataV29.toHex()
-			) as ApiDecoration<'promise'>;
+			/**
+			 * This is the mockApi adjusted to mock a runtime that uses
+			 * consts.system.blockWeights for its weight nomination.
+			 */
+			const mockHistoricApiAdjusted = {
+				consts: {
+					system: {
+						blockWeights: {
+							perClass: {
+								normal: {
+									baseExtrinsic: polkadotRegistry.createType('u64', 125000000),
+								},
+								operational: {
+									baseExtrinsic: polkadotRegistry.createType('u64', 125000000),
+								},
+								mandatory: {
+									baseExtrinsic: polkadotRegistry.createType('u64', 125000000),
+								},
+							},
+						},
+					},
+				},
+			} as unknown as ApiDecoration<'promise'>;
 
-			const weightValue = blocksService['getWeight'](historicApi);
+			const weightValue = blocksService['getWeight'](mockHistoricApiAdjusted);
 
 			expect(
 				(weightValue as unknown as PerClassValue).perClass.normal.baseExtrinsic
@@ -321,11 +365,11 @@ describe('BlocksService', () => {
 			expect(
 				(weightValue as unknown as PerClassValue).perClass.operational
 					.baseExtrinsic
-			).toBe(BigInt(1));
+			).toBe(BigInt(125000000));
 			expect(
 				(weightValue as unknown as PerClassValue).perClass.mandatory
 					.baseExtrinsic
-			).toBe(BigInt(512000000000001));
+			).toBe(BigInt(125000000));
 		});
 	});
 
