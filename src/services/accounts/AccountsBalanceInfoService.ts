@@ -1,3 +1,19 @@
+// Copyright 2017-2022 Parity Technologies (UK) Ltd.
+// This file is part of Substrate API Sidecar.
+//
+// Substrate API Sidecar is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 import { ApiDecoration } from '@polkadot/api/types';
 import { Vec } from '@polkadot/types';
 import {
@@ -8,7 +24,7 @@ import {
 	Index,
 } from '@polkadot/types/interfaces';
 import { BadRequest } from 'http-errors';
-import { IAccountBalanceInfo } from 'src/types/responses';
+import { IAccountBalanceInfo, IBalanceLock } from 'src/types/responses';
 
 import { AbstractService } from '../AbstractService';
 
@@ -25,9 +41,22 @@ export class AccountsBalanceInfoService extends AbstractService {
 		hash: BlockHash,
 		historicApi: ApiDecoration<'promise'>,
 		address: string,
-		token: string
+		token: string,
+		denominate: boolean
 	): Promise<IAccountBalanceInfo> {
 		const { api } = this;
+
+		if (denominate && historicApi.registry.chainDecimals.length === 0) {
+			throw new BadRequest(
+				"Invalid use of the query parameter `denominated`. This chain doesn't have a valid chain decimal to denominate a value."
+			);
+		}
+
+		const capitalizeTokens = historicApi.registry.chainTokens.map((token) =>
+			token.toUpperCase()
+		);
+		const tokenIdx = capitalizeTokens.indexOf(token);
+		const decimal = historicApi.registry.chainDecimals[tokenIdx];
 		/**
 		 * Check two different cases where a historicApi is needed in order
 		 * to have the correct runtime methods.
@@ -63,11 +92,11 @@ export class AccountsBalanceInfoService extends AbstractService {
 					at,
 					nonce,
 					tokenSymbol: token,
-					free,
-					reserved,
-					miscFrozen,
-					feeFrozen,
-					locks,
+					free: this.inDenominationBal(denominate, free, decimal),
+					reserved: this.inDenominationBal(denominate, reserved, decimal),
+					miscFrozen: this.inDenominationBal(denominate, miscFrozen, decimal),
+					feeFrozen: this.inDenominationBal(denominate, feeFrozen, decimal),
+					locks: this.inDenominationLocks(denominate, locks, decimal),
 				};
 			} else {
 				throw new BadRequest('Account not found');
@@ -96,11 +125,11 @@ export class AccountsBalanceInfoService extends AbstractService {
 					at,
 					nonce,
 					tokenSymbol: token,
-					free,
-					reserved,
-					miscFrozen,
-					feeFrozen,
-					locks,
+					free: this.inDenominationBal(denominate, free, decimal),
+					reserved: this.inDenominationBal(denominate, reserved, decimal),
+					miscFrozen: this.inDenominationBal(denominate, miscFrozen, decimal),
+					feeFrozen: this.inDenominationBal(denominate, feeFrozen, decimal),
+					locks: this.inDenominationLocks(denominate, locks, decimal),
 				};
 			} else {
 				throw new BadRequest('Account not found');
@@ -161,14 +190,91 @@ export class AccountsBalanceInfoService extends AbstractService {
 				at,
 				nonce,
 				tokenSymbol: token,
-				free,
-				reserved,
-				miscFrozen,
-				feeFrozen,
-				locks,
+				free: this.inDenominationBal(denominate, free, decimal),
+				reserved: this.inDenominationBal(denominate, reserved, decimal),
+				miscFrozen: this.inDenominationBal(denominate, miscFrozen, decimal),
+				feeFrozen: this.inDenominationBal(denominate, feeFrozen, decimal),
+				locks: this.inDenominationLocks(denominate, locks, decimal),
 			};
 		} else {
 			throw new BadRequest('Account not found');
 		}
+	}
+
+	/**
+	 * Apply a denomination to a balance depending on the chains decimal value.
+	 *
+	 * @param balance free balance available encoded as Balance. This will be
+	 * represented as an atomic value.
+	 * @param dec The chains given decimal token value. It must be > 0, and it
+	 * is applied to the given atomic value given by the `balance`.
+	 */
+	private applyDenominationBalance(balance: Balance, dec: number): string {
+		const strBalance = balance.toString();
+
+		// We dont want to denominate a zero balance or zero decimal
+		if (strBalance === '0' || dec === 0) {
+			return strBalance;
+		}
+		// If the denominated value will be less then zero, pad it correctly
+		if (strBalance.length <= dec) {
+			return '.'.padEnd(dec - strBalance.length + 1, '0').concat(strBalance);
+		}
+
+		const lenDiff = strBalance.length - dec;
+		return (
+			strBalance.substring(0, lenDiff) +
+			'.' +
+			strBalance.substring(lenDiff, strBalance.length)
+		);
+	}
+
+	/**
+	 * Parse and denominate the `amount` key in each BalanceLock
+	 *
+	 * @param locks A vector containing BalanceLock objects
+	 * @param dec The chains given decimal value
+	 */
+	private applyDenominationLocks(
+		locks: Vec<BalanceLock>,
+		dec: number
+	): IBalanceLock[] {
+		return locks.map((lock) => {
+			return {
+				id: lock.id,
+				amount: this.applyDenominationBalance(lock.amount, dec),
+				reasons: lock.reasons,
+			};
+		});
+	}
+
+	/**
+	 * Either denominate a value, or return the original Balance as an atomic value.
+	 *
+	 * @param denominate Boolean to determine whether or not we denominate a balance
+	 * @param bal Inputted Balance
+	 * @param dec Decimal value used to denominate a Balance
+	 */
+	private inDenominationBal(
+		denominate: boolean,
+		bal: Balance,
+		dec: number
+	): Balance | string {
+		return denominate ? this.applyDenominationBalance(bal, dec) : bal;
+	}
+
+	/**
+	 * Either denominate the Balance's within Locks or return the original Locks.
+	 *
+	 * @param denominate Boolean to determine whether or not we denominate a balance
+	 * @param locks Inputted Vec<BalanceLock>, only the amount key will be denominated
+	 * @param dec Decimal value used to denominate a Balance
+	 */
+	private inDenominationLocks(
+		denominate: boolean,
+		locks: Vec<BalanceLock>,
+		dec: number
+	): Vec<BalanceLock> | IBalanceLock[] {
+		return denominate ? this.applyDenominationLocks(locks, dec) : locks;
 	}
 }

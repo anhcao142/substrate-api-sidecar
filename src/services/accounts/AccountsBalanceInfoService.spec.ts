@@ -1,3 +1,19 @@
+// Copyright 2017-2022 Parity Technologies (UK) Ltd.
+// This file is part of Substrate API Sidecar.
+//
+// Substrate API Sidecar is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -80,7 +96,8 @@ describe('AccountsBalanceInfoService', () => {
 						blockHash789629,
 						mockHistoricApi,
 						testAddress,
-						'DOT'
+						'DOT',
+						false
 					)
 				)
 			).toStrictEqual(accountsBalanceInfo789629);
@@ -91,7 +108,8 @@ describe('AccountsBalanceInfoService', () => {
 				blockHash789629,
 				mockHistoricApi,
 				testAddress,
-				'DOT'
+				'DOT',
+				false
 			);
 
 			const expectedResponse = {
@@ -186,7 +204,8 @@ describe('AccountsBalanceInfoService', () => {
 								blockHash789629,
 								tokenHistoricApi,
 								testAddress,
-								'fOoToKeN'
+								'fOoToKeN',
+								false
 							)
 						) as any
 					).tokenSymbol
@@ -205,7 +224,8 @@ describe('AccountsBalanceInfoService', () => {
 								blockHash789629,
 								tokenHistoricApi,
 								testAddress,
-								'doT'
+								'doT',
+								false
 							)
 						) as any
 					).tokenSymbol
@@ -215,6 +235,84 @@ describe('AccountsBalanceInfoService', () => {
 				expect(mockTokenAccountAt).not.toBeCalled();
 				expect(mockBalancesLocksAt).toBeCalled();
 			});
+		});
+	});
+
+	describe('applyDenomination', () => {
+		const balance = polkadotRegistry.createType('Balance', 12345);
+
+		it('Should correctly denominate a balance when balance.length <= decimal', () => {
+			const ltValue = accountsBalanceInfoService['applyDenominationBalance'](
+				balance,
+				7
+			);
+			const etValue = accountsBalanceInfoService['applyDenominationBalance'](
+				balance,
+				5
+			);
+
+			expect(ltValue).toBe('.0012345');
+			expect(etValue).toBe('.12345');
+		});
+
+		it('Should correctly denominate a balance when balance.length > decimal', () => {
+			const value = accountsBalanceInfoService['applyDenominationBalance'](
+				balance,
+				3
+			);
+
+			expect(value).toBe('12.345');
+		});
+
+		it('Should correctly denominate a balance when balance is equal to zero', () => {
+			const zeroBalance = polkadotRegistry.createType('Balance', 0);
+			const value = accountsBalanceInfoService['applyDenominationBalance'](
+				zeroBalance,
+				2
+			);
+
+			expect(value).toBe('0');
+		});
+
+		it('Should correctly denominate a balance when the decimal value is zero', () => {
+			const value = accountsBalanceInfoService['applyDenominationBalance'](
+				balance,
+				0
+			);
+
+			expect(value).toBe('12345');
+		});
+	});
+
+	describe('denominateLocks', () => {
+		it('Should correctly parse and denominate a Vec<BalanceLocks>', () => {
+			const balanceLock = polkadotRegistry.createType('BalanceLock', {
+				id: '0x7374616b696e6720',
+				amount: 12345,
+				reasons: 'All',
+			});
+			const vecLocks = polkadotRegistry.createType('Vec<BalanceLock>', [
+				balanceLock,
+			]);
+			const value = accountsBalanceInfoService['applyDenominationLocks'](
+				vecLocks,
+				3
+			);
+			const expectedValue = [
+				{ amount: '12.345', id: '0x7374616b696e6720', reasons: 'All' },
+			];
+
+			expect(sanitizeNumbers(value)).toStrictEqual(expectedValue);
+		});
+
+		it('Should handle an empty Vec correctly', () => {
+			const vecLocks = polkadotRegistry.createType('Vec<BalanceLock>', []);
+			const value = accountsBalanceInfoService['applyDenominationLocks'](
+				vecLocks,
+				3
+			);
+
+			expect(sanitizeNumbers(value)).toStrictEqual([]);
 		});
 	});
 });
