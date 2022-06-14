@@ -20,9 +20,7 @@
 import '@polkadot/api-augment';
 
 import { ApiPromise } from '@polkadot/api';
-import * as apps from '@polkadot/apps-config/api';
 import { WsProvider, HttpProvider } from '@polkadot/rpc-provider';
-import { createWsEndpoints } from '@polkadot/apps-config/endpoints';
 import { OverrideBundleType, RegistryTypes } from '@polkadot/types/types';
 import { json } from 'express';
 
