@@ -87,7 +87,7 @@ export class Specs {
 			throw APPEND_SPEC_ERROR;
 		}
 
-		// WS
+		// WS OR HTTP
 		this._specs.appendSpec(
 			MODULES.SUBSTRATE,
 			this._specs.getSpec(CONFIG.URL, 'Provider URL', {

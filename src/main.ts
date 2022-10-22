@@ -101,29 +101,28 @@ async function main() {
  * Prompt the user with some basic info about the node and the network they have
  * connected Sidecar to.
  *
- * @param wsUrl websocket url of the node Sidecar is connected to
+ * @param url Url of the node Sidecar is connected to, can be a websocket or http address
  * @param chainName chain name of the network Sidecar is connected to
  * @param implName implementation name of the node Sidecar is connected to
  */
-function startUpPrompt(wsUrl: string, chainName: string, implName: string) {
+function startUpPrompt(url: string, chainName: string, implName: string) {
 	const { logger } = Log;
-	const { config } = SidecarConfig;
 
 	logger.info(
-		`Connected to chain ${chainName} on the ${implName} client at ${config.SUBSTRATE.URL}`
+		`Connected to chain ${chainName} on the ${implName} client at ${url}`
 	);
 
 	// Split the Url to check for 2 things. Secure connection, and if its a local IP.
-	const splitUrl: string[] = wsUrl.split(':');
+	const splitUrl: string[] = url.split(':');
 	// If its 'ws' its not a secure connection.
-	const isSecure: boolean = splitUrl[0] === 'wss';
+	const isSecure: boolean = splitUrl[0] === 'wss' || splitUrl[0] === 'https';
 	// Check if its a local IP.
 	const isLocal: boolean =
 		splitUrl[1] === '//127.0.0.1' || splitUrl[1] === '//localhost';
 
 	if (!isSecure && !isLocal) {
 		logger.warn(
-			`Using unencrypted connection to a public node (${wsUrl}); All traffic is sent over the internet in cleartext.`
+			`Using unencrypted connection to a public node (${url}); All traffic is sent over the internet in cleartext.`
 		);
 	}
 }

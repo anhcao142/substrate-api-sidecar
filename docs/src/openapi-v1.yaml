@@ -8,7 +8,7 @@ info:
   license:
     name: GPL-3.0-or-later
     url: https://github.com/paritytech/substrate-api-sidecar/blob/master/LICENSE
-  version: 12.2.0
+  version: 14.0.1
 tags:
 - name: accounts
 - name: blocks
@@ -189,6 +189,68 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /accounts/{accountId}/convert:
+    get:
+      tags:
+      - accounts
+      summary: Convert a given AccountId to an SS58 address.
+      description: Returns the SS58 prefix, the network address format, the SS58 address, and the AccountId
+        that was given as input parameter, the scheme that was used and if it is a public key or not (boolean).
+      operationId: accountConvert
+      parameters:
+      - name: accountId
+        in: path
+        description: AccountId or Public Key (hex).
+        required: true
+        schema:
+          format: AccountId or Hex
+          type: string
+      - name: scheme
+        in: query
+        description: The cryptographic scheme to be used in order to convert the AccountId to
+          an SS58 address. It can take one of three values [sr25519, ed25519, ecdsa].
+          The default scheme that is used is `sr25519` (if it is not set in the query parameter).
+        required: false
+        schema:
+          type: string
+          format: string
+          default: 'sr25519'
+      - name: prefix
+        in: query
+        description: The address prefix which can be one of the values found in the SS58-registry.
+        required: false
+        schema:
+          type: string
+          format: number
+          default: 42
+      - name: publicKey
+        in: query
+        description: Defines if the given value in the path parameter is a Public Key (hex)
+          or not (hence AccountId).
+        required: false
+        schema:
+          type: string
+          format: boolean
+          default: true
+      responses:
+        "200":
+          description: successfully converted the AccountId and retrieved the address info.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountConvert'
+        "400":
+          description: Invalid AccountId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "404":
+          description: AccountId not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /accounts/{accountId}/staking-info:
     get:
       tags:
@@ -344,15 +406,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /accounts/{accountId}/validate:
+  /accounts/{address}/validate:
     get:
       tags:
       - accounts
       summary: Validate a given address.
-      description: Returns whether the given address is valid ss58 format and the ss58 prefix if the address has one.
+      description: Returns whether the given address is valid ss58 format, the ss58 prefix if the address has one,
+        the network address format, and what the account ID is for this address.
       operationId: getValidationByAccountId
       parameters:
-      - name: accountId
+      - name: address
         in: path
         description: SS58 or Hex address of the account.
         required: true
@@ -381,6 +444,22 @@ paths:
         example: 0-499
         schema:
           type: string
+      - name: eventDocs
+        in: query
+        description: When set to `true`, every event will have an extra `docs`
+          property with a string of the events documentation.
+        required: false
+        schema:
+          type: boolean
+          default: false
+      - name: extrinsicDocs
+        in: query
+        description: When set to `true`, every extrinsic will have an extra `docs`
+          property with a string of the extrinsics documentation.
+        required: false
+        schema:
+          type: boolean
+          default: false
       responses:
         "200":
           description: successful operation
@@ -988,19 +1067,17 @@ paths:
         required: false
         schema:
           type: boolean
-      - name: key1
+      - name: keys
         in: query
-        description: Key for a map, or first key for a double map. Required for querying
-          a map.
+        description: Set of N keys used for querying a storage map. It should be queried using the 
+          following format - ?keys[]=key1&keys[]=key2. Order matters, as it will determine the 
+          order the keys are passed into the storage calls.
         required: false
         schema:
-          type: string
-      - name: key2
-        in: query
-        description: Second key for a double map. Required for querying a double map.
-        required: false
-        schema:
-          type: string
+          type: array
+          items:
+            type: string
+          description: An array of storage keys.
       - name: at
         in: query
         description: Block at which to query the storage item at.
@@ -1423,6 +1500,30 @@ components:
             locks
           items:
             $ref: '#/components/schemas/BalanceLock'
+    AccountConvert:
+      type: object
+      properties:
+        ss58Prefix:
+          type: string
+          description: SS58 prefix based on which the account ID or Public Key (hex) is converted to an SS58 address.
+          format: unsignedInteger
+        network:
+          type: string
+          description: The network based on which the returned address is encoded. It depends on the prefix
+            that was given as a query param.
+        address:
+          type: string
+          description: The returned SS58 address which is the result of the conversion
+            of the account ID or Public Key (hex).
+        accountId:
+          type: string
+          description: The given account ID or Public Key (hex) that is converted to an SS58 address.
+        scheme:
+          type: string
+          description: The cryptographic scheme/algorithm used to encode the given account ID or Public Key (hex).
+        publicKey:
+          type: boolean
+          description: Whether the given path parameter is a Public Key (hex) or not.
     AccountStakingInfo:
       type: object
       properties:
@@ -1491,6 +1592,12 @@ components:
           description: SS58 prefix of the given address. If the address is a valid
             base58 format, but incorrect ss58, a prefix for the given address will still be returned.
           format: unsignedInteger
+        network:
+          type: string
+          description: The network based on which the given address is encoded.
+        accountId:
+          type: string
+          description: The account id of the given address.
     AccountVestingInfo:
       type: object
       description: Sidecar version's <= v10.0.0 have a`vesting` return value that defaults to an object for
@@ -2125,14 +2232,12 @@ components:
           type: string
           description: Name of the storage item.
           example: "referendumInfoOf"
-        key1:
-          type: string
-          description: Key1 query param. Will not show up in response unless it was passed as part of the URI.
-          example: "2"
-        key2:
-          type: string
-          description: Key2 query param. Will not show up in response if not defined in URI.
-          example: ""
+        keys:
+          type: array
+          items:
+            type: string
+          description: N Storage keys passed in as the `keys` query param. 
+          example: ["0x00", "0x01"]
         value:
           type: object
           description: Value returned by this storage query.
@@ -2409,6 +2514,12 @@ components:
           type: string
           description: The _inclusion fee_ of a transaction, i.e. the minimum fee required for a transaction. Includes weight and encoded length fees, but does not have access to any signed extensions, e.g. the `tip`.
           format: unsignedInteger
+        kind:
+          type: string
+          description: Information on the partialFee that is collected. Can be either `preDispatch`, `postDispatch` or `fromEvent`.
+            `preDispatch` means the information used to collect the fee was from `payment_queryInfo`, `postDispatch` means
+            the information used to calculate the fee was from finalized weights for the extrinsic, and `fromEvent` means that the partialFee was
+            abstracted from the `TransactionPayment::TransactionPaidFee` event. 
       description: RuntimeDispatchInfo for the transaction. Includes the `partialFee`.
     RuntimeSpec:
       type: object

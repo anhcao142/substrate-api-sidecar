@@ -2,6 +2,231 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [14.0.1](https://github.com/paritytech/substrate-api-sidecar/compare/v14.0.0..v14.0.1) (2022-10-19)
+
+### Chores
+
+- chore(yarn): bump yarn ([#1079](https://github.com/paritytech/substrate-api-sidecar/pull/1079)) ([eb368ae](https://github.com/paritytech/substrate-api-sidecar/commit/eb368aeec34b7c8a85802ff0e3e01c94553aca2f))
+- chore(deps): updated polkadot-js deps ([#1090](https://github.com/paritytech/substrate-api-sidecar/pull/1090)) ([e6a70a3](https://github.com/paritytech/substrate-api-sidecar/commit/e6a70a35689956a53b9bec7a1297a82825faa49f))
+
+### CI
+
+- ci: bump Swatinem/rust-cache from 2.0.0 to 2.0.1 ([#1084](https://github.com/paritytech/substrate-api-sidecar/pull/1084)) ([aa2c9cb](https://github.com/paritytech/substrate-api-sidecar/commit/aa2c9cb5b525f97661b6a649d2fd716e2a78e445))
+- ci: push metrics to prometheus-pushgateway ([#1086](https://github.com/paritytech/substrate-api-sidecar/pull/1086)) ([9284bd1](https://github.com/paritytech/substrate-api-sidecar/commit/9284bd1240ae4c0fcaa63f760dc17feeb1ceaaeb))
+
+### Docs
+
+- docs: Changes in schema & guide ([#1080](https://github.com/paritytech/substrate-api-sidecar/pull/1080)) ([3fa9689](https://github.com/paritytech/substrate-api-sidecar/commit/3fa968941cf3bfeca140febe0cbbc502effde7e7))
+
+### Tests
+
+- test(e2e): cleanup timeout ms ([#1072](https://github.com/paritytech/substrate-api-sidecar/pull/1072)) ([935905d](https://github.com/paritytech/substrate-api-sidecar/commit/935905d4cc419eacc389516518bf9a74ff7c7123))
+
+## Compatibility
+
+Tested against:
+- Polkadot v9290
+- Kusama v9290
+- Westend v9300
+
+## [14.0.0](https://github.com/paritytech/substrate-api-sidecar/compare/v13.1.0..v14.0.0) (2022-10-03)
+
+### ⚠ BREAKING CHANGES ⚠
+
+- feat!: support for NStorageMaps ([#1053](https://github.com/paritytech/substrate-api-sidecar/pull/1053)) ([a00a6b0](https://github.com/paritytech/substrate-api-sidecar/commit/a00a6b060cb4a9671fef6d831ffd67536d7b25d5))
+
+### Features 
+
+- feat: add /accounts/:accountId/convert endpoint ([#1007](https://github.com/paritytech/substrate-api-sidecar/pull/1007)) ([e2d6fae](https://github.com/paritytech/substrate-api-sidecar/commit/e2d6fae40d6369bde67c39f30baf70f247145017))
+
+### Chores
+
+- chore(deps): updated polkadot-js deps ([#1067](https://github.com/paritytech/substrate-api-sidecar/pull/1067)) ([1e09ae7](https://github.com/paritytech/substrate-api-sidecar/commit/1e09ae78f99052c5e30b43f71fe71b3c2bfbf970))
+
+## Compatibility
+
+Tested against:
+- Polkadot v9290
+- Kusama v9290
+- Westend v9290
+
+
+## [13.1.0](https://github.com/paritytech/substrate-api-sidecar/compare/v13.0.0..v13.1.0) (2022-09-19)
+
+### Features
+
+- feat: validateBooleanMiddleware for controllers ([#1023](https://github.com/paritytech/substrate-api-sidecar/pull/1023)) ([fc74d4a](https://github.com/paritytech/substrate-api-sidecar/commit/fc74d4ac1678553f2bcdc20902e576a5c586112c))
+
+### Chores
+
+- chore(deps): updated polkadot-js deps ([#1059](https://github.com/paritytech/substrate-api-sidecar/pull/1059)) ([90131ee](https://github.com/paritytech/substrate-api-sidecar/commit/90131eeee4bc14353a40c3e3f56a7f03b0d592c9))
+- chore(yarn): bum yarn to 3.2.3 ([#1054](https://github.com/paritytech/substrate-api-sidecar/pull/1054)) ([bc5b2d0](https://github.com/paritytech/substrate-api-sidecar/commit/bc5b2d0eccc71615bdae053ab761f3e95ab815dc))
+- chore(deps): update polkadot-js api, util-crypto ([#1048](https://github.com/paritytech/substrate-api-sidecar/pull/1048)) ([1719d8b](https://github.com/paritytech/substrate-api-sidecar/commit/1719d8bbc6e48b86496bdffbf3c7fc75be9a810a))
+
+### CI
+
+- ci: use polkadot node managed by argo-cd ([#1051](https://github.com/paritytech/substrate-api-sidecar/pull/1051)) ([d67d3a5](https://github.com/paritytech/substrate-api-sidecar/commit/d67d3a5027c684257ee7a8bed0c2d49904cdb2d7))
+
+### Bug Fixes
+
+- fix: add TransactionPayment::TransactionPaidFee support ([#1040](https://github.com/paritytech/substrate-api-sidecar/pull/1040)) ([108a93b](https://github.com/paritytech/substrate-api-sidecar/commit/108a93b1c3a23539a5be635c918d7cffd2b8be68))
+
+### Tests
+
+- test: fix deprecated lruCache.size deprecation ([#1042](https://github.com/paritytech/substrate-api-sidecar/pull/1042)) ([4820342](https://github.com/paritytech/substrate-api-sidecar/commit/4820342978855eaab212ef3eeae1e51013963bed))
+
+### Docs
+
+- docs: remove fee integration guide ([#1010](https://github.com/paritytech/substrate-api-sidecar/pull/1010)) ([66f57b5](https://github.com/paritytech/substrate-api-sidecar/commit/66f57b56c0a81d201fd2832603cf6d150aa48c23))
+
+## Compatibility
+
+Tested against:
+- Polkadot v9290
+- Kusama v9290
+- Westend v9290
+
+
+## [13.0.0](https://github.com/paritytech/substrate-api-sidecar/compare/v12.4.3..v13.0.0) (2022-08-31)
+
+### ⚠ BREAKING CHANGES ⚠
+
+- fix!: integrate @substrate/calc@0.3.0 for partial fees ([#1017](https://github.com/paritytech/substrate-api-sidecar/pull/1017)) ([92e3e1d](https://github.com/paritytech/substrate-api-sidecar/commit/92e3e1daba43bbefb1159fa84ceee0362380ac49))
+    - Note: This removes the query param `feeByEvent` for all `/blocks/*` endpoints. Fee's are correctly calculated by default and dont require a secondary way of retrieving the `partialFee`. For historical blocks, an error might be logged and emitted for chains that don't have `TransactionPaymentApi::query_feeDetails` in their runtime API. The error is emitted by polkadot-js regardless of catching it, but it does not affect fee calculation as also logged by a follow up warning. Please refer to the PR for more information.
+- feat!: add support for http provider using SAS_SUBSTRATE_URL ([#1001](https://github.com/paritytech/substrate-api-sidecar/pull/1001)) ([b12daa8](https://github.com/paritytech/substrate-api-sidecar/commit/b12daa8784a55e6dce587898d7d41ce46c8c191f))
+    - Note: This replaces the standard `SAS_SUBSTRATE_WS_URL` with `SAS_SUBSTRATE_URL`. It's important when updating to sidecar v13.0.0 to replace all instances of the env variable with the new one. 
+
+### Bug Fixes
+
+- fix: current leases undefined bug ([#1034](https://github.com/paritytech/substrate-api-sidecar/pull/1034)) ([ae340ed](https://github.com/paritytech/substrate-api-sidecar/commit/ae340edcdbc812372fdd4f22871d349052ffd037))
+- fix: remove deprecated reset for lru cache and replace with clear ([#1021](https://github.com/paritytech/substrate-api-sidecar/pull/1021)) ([55ef00d](https://github.com/paritytech/substrate-api-sidecar/commit/55ef00d365088855393babc143b82ddd347aadf4))
+- fix: add bifrost_polkadot controller config ([#1009](https://github.com/paritytech/substrate-api-sidecar/pull/1009)) ([2fdbe31](https://github.com/paritytech/substrate-api-sidecar/commit/2fdbe319610651761a7f67f0141ba012cdf8b2a9)) Contributed by ([hqwangningbo](https://github.com/hqwangningbo))
+
+### CI
+
+- ci: pin gha versions add dependabot ([#1026](https://github.com/paritytech/substrate-api-sidecar/pull/1026)) ([b421c65](https://github.com/paritytech/substrate-api-sidecar/commit/b421c6582e4ae8c23e898934e812f38944d65b08))
+
+### Chores
+
+- chore(deps): update polkadot-js api and util-crypto ([#1030](https://github.com/paritytech/substrate-api-sidecar/pull/1030)) ([f59b7db](https://github.com/paritytech/substrate-api-sidecar/commit/f59b7dbeae430019ba3b115393b2fe8edb4dc241))
+- chore(deps): update @substrate/dev ([#1028](https://github.com/paritytech/substrate-api-sidecar/pull/1028)) ([4443924](https://github.com/paritytech/substrate-api-sidecar/commit/4443924a6f136fd1cf903f0f5858e84854f9b304))
+- chore(deps): update polkadot api, and util-crypto ([#1024](https://github.com/paritytech/substrate-api-sidecar/pull/1024)) ([62b028e](https://github.com/paritytech/substrate-api-sidecar/commit/62b028e4eb3fd7136ffcd13f44ec7fceb3122bfa))
+- chore(deps): update api, and util-crypto ([#1019](https://github.com/paritytech/substrate-api-sidecar/pull/1019)) ([d12b2f7](https://github.com/paritytech/substrate-api-sidecar/commit/d12b2f7e50a5e160e7e1e05568976251fd7a2b22))
+
+## Compatibility
+
+Tested against:
+- Polkadot v9270
+- Kusama v9270
+- Westend v9280
+
+
+## [12.4.3](https://github.com/paritytech/substrate-api-sidecar/compare/v12.4.2..v12.4.3) (2022-08-09)
+
+### Bug Fixes
+
+- fix: add support for Parallel and Heiko ([#1012](https://github.com/paritytech/substrate-api-sidecar/pull/1012)) ([8770f3a](https://github.com/paritytech/substrate-api-sidecar/commit/8770f3a70b2156f5a9c2610a2f3f32c2e08f5e33))
+
+### Chores
+
+- chore(deps): update polkadot-js api, and util-crypto ([8164281](https://github.com/paritytech/substrate-api-sidecar/commit/81642815c42e330f7f5d49f3b8808465f90552cf))
+
+## Compatibility
+
+Tested against:
+- Polkadot v9270
+- Kusama v9270
+- Westend v9270
+
+## [12.4.2](https://github.com/paritytech/substrate-api-sidecar/compare/v12.4.1..v12.4.2) (2022-08-03)
+
+### Bug Fixes
+
+- fix(logging): replace TransformableInfo with ITransformableInfo type ([#994](https://github.com/paritytech/substrate-api-sidecar/pull/994)) ([c058904](https://github.com/paritytech/substrate-api-sidecar/commit/c058904aec5f63c61284240fc77bec928db9254e))
+- fix(feeByEvent): use registry to convert hex to string ([#997](https://github.com/paritytech/substrate-api-sidecar/pull/997)) ([13ca62f](https://github.com/paritytech/substrate-api-sidecar/commit/13ca62f1c1cd8fa697f39cccabe3d1d1de0ea5b1))
+- fix(feeByEvent): handle tip for partialFee ([#1003](https://github.com/paritytech/substrate-api-sidecar/pull/1003)) ([6e60aa9](https://github.com/paritytech/substrate-api-sidecar/commit/6e60aa9b39abf9b51b770c8e6e2d33bc2afac94d))
+
+### Chores
+
+- chore(dep): update polkadot-js api ([#998](https://github.com/paritytech/substrate-api-sidecar/pull/998)) ([fedfaee](https://github.com/paritytech/substrate-api-sidecar/commit/fedfaee0b9f965b39e20cf3714b96f30e9f0332a))
+- chore(README): update readme with generate-type-bundle tool ([#1004](https://github.com/paritytech/substrate-api-sidecar/pull/1004)) ([45b25bf](https://github.com/paritytech/substrate-api-sidecar/commit/45b25bf15f17367d1cb9642b4a495d5ecd06ed59))
+- chore: clean up resolutions ([#1000](https://github.com/paritytech/substrate-api-sidecar/pull/1000)) ([0545454](https://github.com/paritytech/substrate-api-sidecar/commit/0545454a74b5afa215180b8cee6062d7ae2fa32f))
+- chore(yarn): bump yarn ([#996](https://github.com/paritytech/substrate-api-sidecar/pull/996)) ([cefa3f9](https://github.com/paritytech/substrate-api-sidecar/commit/cefa3f9652ed0f8506eb555ec87db98442ade962))
+
+## Compatibility
+
+Tested against:
+- Polkadot v9250
+- Kusama v9250
+- Westend v9250
+
+## [12.4.1](https://github.com/paritytech/substrate-api-sidecar/compare/v12.4.0..v12.4.1) (2022-07-28)
+
+### Bug Fixes
+
+- fix(feeByEvent): fix tip inclusion for partialFee ([#986](https://github.com/paritytech/substrate-api-sidecar/pull/986)) ([91dda83](https://github.com/paritytech/substrate-api-sidecar/commit/91dda83972cec95405f9373e620221a2b0aaeef4))
+- fix(feeByEvent): sanitize fee for hex values ([#990](https://github.com/paritytech/substrate-api-sidecar/pull/990)) ([3f9a2c3](https://github.com/paritytech/substrate-api-sidecar/commit/3f9a2c386486d930dacabfe35ca8c9b7d93cb196))
+
+### Chores
+
+- chore(deps): update polkadot-js api, and util-crypto ([#987](https://github.com/paritytech/substrate-api-sidecar/pull/987)) ([f80666a](https://github.com/paritytech/substrate-api-sidecar/commit/f80666a959099305d28f5c5f296b5e4a41ad895c))
+- chore(deps): update all non polkadot-js deps ([#988](https://github.com/paritytech/substrate-api-sidecar/pull/988)) ([0facebf](https://github.com/paritytech/substrate-api-sidecar/commit/0facebfcc0eb174692358f89660535ec9a4cec3d))
+
+### Docs
+
+- docs(readme): remove mention of apps-config ([#985](https://github.com/paritytech/substrate-api-sidecar/pull/985)) ([e003e93](https://github.com/paritytech/substrate-api-sidecar/commit/e003e93022f5657c12b237a36e39a0189e2e8505))
+
+## Compatibility
+
+Tested against:
+- Polkadot v9250
+- Kusama v9250
+- Westend v9250
+
+## [12.4.0](https://github.com/paritytech/substrate-api-sidecar/compare/v12.3.0..v12.4.0) (2022-07-13)
+
+### Features
+
+- feat: support for feeByEvent query param which will abstract the fees by events ([#970](https://github.com/paritytech/substrate-api-sidecar/pull/970)) ([92c155d](https://github.com/paritytech/substrate-api-sidecar/commit/92c155d86f4fc8aefec65a95c69836a81d7d3330))
+
+### Chores
+
+- chore(deps): update polkadot-js api, and util-crypto ([#982](https://github.com/paritytech/substrate-api-sidecar/pull/982)) ([c34bdde](https://github.com/paritytech/substrate-api-sidecar/commit/c34bddedbf55b26b83dcbfa8f7ef544bbedbcab1))
+
+### Tests
+
+- test(e2e): update validate endpoint ([#979](https://github.com/paritytech/substrate-api-sidecar/pull/979)) ([0a911de](https://github.com/paritytech/substrate-api-sidecar/commit/0a911de995d211116797d6355e11e74aa6ef7808))
+
+## Compatibility
+
+Tested against:
+- Polkadot v9250
+- Kusama v9250
+- Westend v9250
+
+## [12.3.0](https://github.com/paritytech/substrate-api-sidecar/compare/v12.2.0..v12.3.0) (2022-07-06)
+
+### Features
+
+- feat: Added the network and accountId to the response of validate endpoint ([#926](https://github.com/paritytech/substrate-api-sidecar/pull/926)) ([ef513cc](https://github.com/paritytech/substrate-api-sidecar/commit/ef513cc7f26773df776b9fe77cef8046bcadcea6)) Contributed by [Imod7](https://github.com/Imod7)
+
+### Bug Fixes
+
+- fix(pallets): deprecation warning adjustment ([#973](https://github.com/paritytech/substrate-api-sidecar/pull/973)) ([5514631](https://github.com/paritytech/substrate-api-sidecar/commit/55146315be366ea770339ef0f326c36d607a655a))
+
+### Chores
+
+- chore(deps): update polkadot.js, and fix type compilation ([#972](https://github.com/paritytech/substrate-api-sidecar/pull/972)) ([67f5bad](https://github.com/paritytech/substrate-api-sidecar/commit/67f5badb330c68b2ac2e967976ab7560b7a33c40))
+- chore(deps): update polkadot-js api, and util-crypto ([#976](https://github.com/paritytech/substrate-api-sidecar/pull/976)) ([0dd3f63](https://github.com/paritytech/substrate-api-sidecar/commit/0dd3f6334c8f89a38c8bf2bce0537bcc28021df7))
+- chore(dev): update @substrate/dev ([#977](https://github.com/paritytech/substrate-api-sidecar/pull/977)) ([2c3ce3e](https://github.com/paritytech/substrate-api-sidecar/commit/2c3ce3ed09bf9cc010d907bf08e15d946323b3ac))
+
+## Compatibility
+
+Tested against:
+- Polkadot v9240
+- Kusama v9240
+- Westend v9240
+
 ## [12.2.0](https://github.com/paritytech/substrate-api-sidecar/compare/v12.1.1..v12.2.0) (2022-06-22)
 
 ### Features

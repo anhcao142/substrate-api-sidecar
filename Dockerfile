@@ -1,5 +1,7 @@
 FROM docker.io/library/node:16.15.1-alpine as builder
 
+RUN apk add g++ make py3-pip
+
 WORKDIR /opt/builder
 
 COPY . .
